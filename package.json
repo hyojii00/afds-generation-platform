@@ -16,7 +16,6 @@
     "start:api": "node --env-file-if-exists=.env apps/api/dist/main.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint .",

@@ -47,4 +47,25 @@ describe("generation job PostgreSQL persistence", () => {
 
     await expect(repository.findById(job.id)).resolves.toEqual(job);
   });
+
+  it("rejects an incomplete generation jobs schema", async () => {
+    await database.pool.query("create schema incomplete");
+    await database.pool.query(
+      "create table incomplete.generation_jobs (id uuid primary key)",
+    );
+    const incompleteDatabaseUrl = new URL(container.getConnectionUri());
+    incompleteDatabaseUrl.searchParams.set(
+      "options",
+      "-c search_path=incomplete",
+    );
+    const incompleteDatabase = new DatabaseService(
+      incompleteDatabaseUrl.toString(),
+    );
+
+    try {
+      await expect(incompleteDatabase.assertReady()).rejects.toThrow();
+    } finally {
+      await incompleteDatabase.close();
+    }
+  });
 });

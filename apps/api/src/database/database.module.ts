@@ -1,12 +1,10 @@
 import {
-  Global,
   Module,
   type OnApplicationShutdown,
   type OnModuleInit,
 } from "@nestjs/common";
 import { DatabaseService } from "./database.service.js";
 
-@Global()
 @Module({
   providers: [
     {

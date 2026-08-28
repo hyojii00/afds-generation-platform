@@ -17,10 +17,7 @@ export class DatabaseService {
   }
 
   async assertReady(): Promise<void> {
-    await this.db
-      .select({ id: generationJobsTable.id })
-      .from(generationJobsTable)
-      .limit(0);
+    await this.db.select().from(generationJobsTable).limit(0);
   }
 
   async close(): Promise<void> {
