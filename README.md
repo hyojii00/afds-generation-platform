@@ -26,6 +26,8 @@ Content-Type: application/json
 
 See `docs/plans/active-loop.md` for the exact scope, acceptance criteria, and verification evidence.
 
+The next possible outcomes are documented as non-active candidates in `docs/plans/candidates/README.md`. A candidate does not authorize implementation until it is explicitly selected and rewritten as the active loop.
+
 ## Repository shape
 
 | Path | Responsibility |
