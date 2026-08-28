@@ -46,7 +46,7 @@ pnpm verify
 pnpm dev:api
 ```
 
-The API listens on `http://localhost:3000`. Use `pnpm build && pnpm start:api` to run the SWC-compiled output. No external service or credential is required in Active Loop 001. Jobs are intentionally stored in memory; PostgreSQL and asynchronous workers remain separate future loops.
+The API listens on `http://localhost:3000` by default; set `PORT` to override it. Use `pnpm build && pnpm start:api` to run the SWC-compiled output. No external service or credential is required in Active Loop 001. Jobs are intentionally stored in memory; PostgreSQL and asynchronous workers remain separate future loops.
 
 ## Portfolio safety
 

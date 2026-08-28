@@ -1,6 +1,19 @@
 import { randomUUID } from "node:crypto";
-import type { GenerationJob, GenerationProvider } from "./generation-job.js";
-import type { GenerationJobRepository } from "./generation-job.repository.js";
+
+export type GenerationProvider = "mock";
+
+export type GenerationJob = Readonly<{
+  id: string;
+  prompt: string;
+  provider: GenerationProvider;
+  status: "queued";
+  createdAt: string;
+}>;
+
+export interface GenerationJobRepository {
+  save(job: GenerationJob): Promise<void>;
+  findById(id: string): Promise<GenerationJob | undefined>;
+}
 
 export class GenerationJobNotFoundError extends Error {}
 

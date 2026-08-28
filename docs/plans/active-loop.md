@@ -40,10 +40,10 @@ An API client can submit a mock-provider generation job and retrieve the same ac
 
 | Check | Result |
 | --- | --- |
-| `pnpm test:unit` | Passed — 2 tests |
-| `pnpm test:e2e` | Passed — 3 tests |
+| `pnpm test:unit` | Passed — 2 tests after cleanup |
+| `pnpm test:e2e` | Passed — 3 tests after cleanup |
 | `pnpm check:boundaries` | Passed — Fastify required and Express rejected |
 | `pnpm verify` | Passed — includes typecheck, SWC build, and built-API smoke test |
-| SWC-built API `POST` → `GET` smoke test | Passed — retrieved response matched created response |
+| SWC-built API `POST` → `GET` smoke test | Passed on an isolated port |
 | Direct runtime dependency check | Passed — Fastify present, Express absent |
-| Diff critique | Passed — only runtime, compiler, verification, and owning documentation changed |
+| Diff critique | Passed — public API and response shape preserved; two redundant files removed |

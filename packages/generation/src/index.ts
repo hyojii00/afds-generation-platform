@@ -1,9 +1,8 @@
 export type {
   GenerationJob,
-  GenerationJobStatus,
+  GenerationJobRepository,
   GenerationProvider,
-} from "./generation-job.js";
-export type { GenerationJobRepository } from "./generation-job.repository.js";
+} from "./generation-jobs.js";
 export {
   GenerationJobNotFoundError,
   GenerationJobs,
