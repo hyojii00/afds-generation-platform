@@ -2,7 +2,7 @@
 
 ## State
 
-`implementing`
+`ready_for_review`
 
 ## Target
 
@@ -57,11 +57,11 @@ A job accepted through the existing API remains retrievable after the API proces
 
 | Check | Result |
 | --- | --- |
-| Migration from empty PostgreSQL | Pending |
-| Repository integration tests | Pending |
-| API create → restart → retrieve E2E | Pending |
-| PostgreSQL-unavailable startup test | Pending |
-| Existing unit and HTTP contract tests | Pending |
-| `pnpm check:boundaries` | Pending |
-| `pnpm verify` | Pending |
-| Diff critique | Pending |
+| Migration from empty PostgreSQL | Passed — `pnpm test:integration` creates the schema through `drizzle/0000_create_generation_jobs.sql` |
+| Repository integration tests | Passed — `pnpm test:integration` (2 tests) |
+| API create → restart → retrieve E2E | Passed — `pnpm test:e2e` (4 tests) |
+| PostgreSQL-unavailable startup test | Passed — covered by `pnpm test:e2e` |
+| Existing unit and HTTP contract tests | Passed — `pnpm test:unit` (2 tests) and `pnpm test:e2e` (4 tests) |
+| `pnpm check:boundaries` | Passed — generation and Fastify adapter boundaries are intact |
+| `pnpm verify` | Passed — formatting, lint, boundaries, 8 tests, docs, typecheck, SWC build, and built-API smoke |
+| Diff critique | Passed — `git diff --check`; reviewed for scope, domain coupling, public-contract regression, and speculative abstractions |

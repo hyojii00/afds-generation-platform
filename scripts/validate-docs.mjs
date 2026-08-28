@@ -13,6 +13,8 @@ const requiredFiles = [
   "docs/product/generation-platform.md",
   "docs/architecture/system.md",
   "docs/architecture/decisions/0001-use-fastify-and-swc.md",
+  "docs/architecture/decisions/0002-use-postgresql-and-drizzle.md",
+  "docs/runbooks/local-development.md",
   "docs/plans/active-loop.md",
   "docs/plans/completed/001-accept-and-retrieve-generation-jobs.md",
   "docs/plans/candidates/README.md",
@@ -42,8 +44,8 @@ if (!activeLoop.startsWith("# Active Loop 002")) {
   throw new Error("Active loop must be Loop 002");
 }
 
-if (!activeLoop.includes("`implementing`")) {
-  throw new Error("Active Loop 002 must be implementing");
+if (!activeLoop.includes("`ready_for_review`")) {
+  throw new Error("Active Loop 002 must be ready for review");
 }
 
 for (const path of candidateLoopFiles) {

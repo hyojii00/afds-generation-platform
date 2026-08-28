@@ -10,7 +10,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["apps/**/*.e2e-spec.ts"],
+    include: ["tests/integration/**/*.spec.ts"],
     environment: "node",
     fileParallelism: false,
     hookTimeout: 120_000,

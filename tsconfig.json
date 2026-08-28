@@ -17,5 +17,11 @@
     },
     "types": ["node"]
   },
-  "include": ["apps/**/*.ts", "packages/**/*.ts", "vitest.*.config.ts"]
+  "include": [
+    "apps/**/*.ts",
+    "packages/**/*.ts",
+    "tests/**/*.ts",
+    "drizzle.config.ts",
+    "vitest.*.config.ts"
+  ]
 }

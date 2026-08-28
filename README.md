@@ -12,7 +12,7 @@ The repository demonstrates two things together:
 
 ## Current capability
 
-The first active loop accepts a job for the local mock provider and retrieves it during the API process lifetime.
+The active loop accepts a job for the local mock provider, persists it in PostgreSQL, and retrieves it unchanged after the API process restarts.
 
 ```http
 POST /v1/jobs
@@ -37,18 +37,22 @@ Loop 002 is active in `docs/plans/active-loop.md`; later possible outcomes remai
 | `docs/architecture` | Current boundaries and explicit evolution gates |
 | `docs/plans` | The single active loop and its evidence ledger |
 | `packages/generation` | Framework-independent generation behavior |
-| `apps/api` | NestJS HTTP delivery adapter |
+| `apps/api` | NestJS HTTP delivery and PostgreSQL adapters |
+| `drizzle` | Versioned PostgreSQL migrations |
 
 ## Development
 
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
+cp .env.example .env
+docker compose up -d --wait postgres
+pnpm db:migrate
 pnpm verify
 pnpm dev:api
 ```
 
-The API listens on `http://localhost:3000` by default; set `PORT` to override it. Use `pnpm build && pnpm start:api` to run the SWC-compiled output. No external service or credential is required in Active Loop 001. Jobs are intentionally stored in memory; PostgreSQL and asynchronous workers remain separate future loops.
+The API listens on `http://localhost:3000` by default; set `PORT` to override it. Use `pnpm build && pnpm start:api` to run the SWC-compiled output. The API requires `DATABASE_URL` and an applied migration and fails startup instead of falling back to memory. `pnpm verify` uses isolated PostgreSQL containers, so Docker must be available. See `docs/runbooks/local-development.md` for operations and cleanup.
 
 ## Portfolio safety
 
