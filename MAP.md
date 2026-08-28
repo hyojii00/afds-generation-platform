@@ -7,6 +7,7 @@
 | Runtime and compiler decision | `docs/architecture/decisions/0001-use-fastify-and-swc.md` |
 | AI-first delivery contract | `.afds/constitution.md`, `.afds/workflow.md` |
 | Current change scope and evidence | `docs/plans/active-loop.md` |
+| Candidate loop roadmap | `docs/plans/candidates/README.md` |
 | Generation job behavior | `packages/generation` |
 | HTTP delivery adapter | `apps/api` |
 
