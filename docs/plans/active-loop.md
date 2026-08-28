@@ -6,7 +6,7 @@
 
 ## Target
 
-A job accepted through the existing API is claimed by an independently runnable worker and reaches a durable terminal state, while concurrent claims, expired leases, and bounded failures cannot apply the same result twice.
+A persisted queued job is claimed by an independently runnable worker and reaches `succeeded` or `failed`, while concurrent claimers and stale owners cannot apply a terminal result twice.
 
 ## Allowed scope
 
@@ -42,6 +42,7 @@ A job accepted through the existing API is claimed by an independently runnable 
 - Use PostgreSQL job-row leasing with `FOR UPDATE SKIP LOCKED`; an outbox adds a relay and duplicate-delivery boundary without an external consumer in this loop.
 - Use the existing generation-job row as the durable work item so API creation remains a single atomic insert rather than a speculative queue table.
 - Assign a UUID fencing token and a 30-second lease on each claim. Completion or failure updates require `processing`, the current token, and an unexpired lease.
+- Use PostgreSQL transaction time for availability, lease expiry, and fencing comparisons so worker clock skew cannot change ownership decisions.
 - Increment the attempt count when claiming. Allow three total attempts, with retryable failures available after 1 second and then 2 seconds; the third retryable failure and every permanent failure are terminal.
 - Reclaim expired `processing` rows below three attempts with a new fencing token so late updates from the prior owner are rejected. Mark an expired third attempt `failed` during recovery.
 - Keep the local executor deterministic and side-effect-free. Loop 004 owns real provider contracts and their external idempotency strategy.
@@ -51,14 +52,15 @@ A job accepted through the existing API is claimed by an independently runnable 
 
 - Stop in `replan` if PostgreSQL leasing and fencing cannot prove one active owner and rejection of stale completion under concurrency.
 - Stop in `replan` if reliable execution requires an external broker, outbox relay, or a new HTTP route or response field.
-- Stop in `replan` if retry and lease tests require wall-clock sleeps instead of an injected deterministic clock.
+- Stop in `replan` if retry and lease tests require wall-clock sleeps or application-process clocks for ownership decisions; arrange database timestamps directly in tests.
 - Do not introduce a provider abstraction, distributed scheduler, generalized repository framework, or external side effect.
 
 ## Pre-mortem
 
 - **Duplicate application:** a worker finishes after losing its lease. Mitigate with an unexpired UUID fencing token on every terminal update.
 - **Stuck processing row:** a worker exits mid-execution. Mitigate by reclaiming expired leases and proving recovery after worker recreation.
-- **Retry storm:** many failures become claimable together. Mitigate with bounded attempts, persisted availability times, and small explicit backoffs.
+- **Retry amplification:** many failures become claimable together. Cap amplification with three attempts and persisted availability; production jitter and rate limiting remain out of scope.
+- **Clock skew:** workers disagree about lease expiry. Mitigate by using PostgreSQL transaction time as the single ownership clock.
 - **False concurrency evidence:** tests serialize worker claims accidentally. Mitigate with two independent database connections synchronized at the claim boundary.
 
 ## Evidence ledger
