@@ -1,14 +1,14 @@
-# Candidate Loops
+# Loop Roadmap
 
-Candidate loops describe likely next outcomes without activating implementation. They are intentionally narrower than an active loop and contain no completed evidence ledger.
+This roadmap shows the active loop and likely later outcomes in dependency order. Candidate documents are intentionally narrower than an active loop and contain no completed evidence ledger.
 
 ## Order
 
-1. [Loop 002 — Persist Generation Jobs](002-persist-generation-jobs.md)
-2. [Loop 003 — Execute Jobs Reliably](003-execute-jobs-reliably.md)
-3. [Loop 004 — Isolate Provider Integrations](004-isolate-provider-integrations.md)
+1. [Loop 002 — Persist Generation Jobs](../active-loop.md) — active
+2. [Loop 003 — Execute Jobs Reliably](003-execute-jobs-reliably.md) — candidate
+3. [Loop 004 — Isolate Provider Integrations](004-isolate-provider-integrations.md) — candidate
 
-Each candidate depends on the previous loop being merged. Authentication, observability infrastructure, external messaging, billing, and real paid providers remain unscheduled.
+Each later candidate depends on the previous loop being merged. Authentication, observability infrastructure, external messaging, billing, and real paid providers remain unscheduled.
 
 ## Activation rule
 

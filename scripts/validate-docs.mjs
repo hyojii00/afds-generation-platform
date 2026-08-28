@@ -1,7 +1,6 @@
 import { access, readFile } from "node:fs/promises";
 
 const candidateLoopFiles = [
-  "docs/plans/candidates/002-persist-generation-jobs.md",
   "docs/plans/candidates/003-execute-jobs-reliably.md",
   "docs/plans/candidates/004-isolate-provider-integrations.md",
 ];
@@ -14,7 +13,10 @@ const requiredFiles = [
   "docs/product/generation-platform.md",
   "docs/architecture/system.md",
   "docs/architecture/decisions/0001-use-fastify-and-swc.md",
+  "docs/architecture/decisions/0002-use-postgresql-and-drizzle.md",
+  "docs/runbooks/local-development.md",
   "docs/plans/active-loop.md",
+  "docs/plans/completed/001-accept-and-retrieve-generation-jobs.md",
   "docs/plans/candidates/README.md",
   ...candidateLoopFiles,
 ];
@@ -28,12 +30,22 @@ for (const heading of [
   "## Allowed scope",
   "## Non-goals",
   "## Acceptance criteria",
+  "## Decisions",
   "## Decision gates",
+  "## Pre-mortem",
   "## Evidence ledger",
 ]) {
   if (!activeLoop.includes(heading)) {
     throw new Error(`Active loop is missing required heading: ${heading}`);
   }
+}
+
+if (!activeLoop.startsWith("# Active Loop 002")) {
+  throw new Error("Active loop must be Loop 002");
+}
+
+if (!activeLoop.includes("`ready_for_review`")) {
+  throw new Error("Active Loop 002 must be ready for review");
 }
 
 for (const path of candidateLoopFiles) {

@@ -13,23 +13,31 @@
     "build": "pnpm clean && pnpm typecheck && pnpm --filter @afds-generation-platform/generation build && pnpm --filter @afds-generation-platform/api build",
     "clean": "node scripts/clean.mjs",
     "dev:api": "pnpm build && pnpm start:api",
-    "start:api": "node apps/api/dist/main.js",
+    "start:api": "node --env-file-if-exists=.env apps/api/dist/main.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint .",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:smoke": "node scripts/smoke-built-api.mjs",
     "validate:docs": "node scripts/validate-docs.mjs",
-    "verify": "pnpm format:check && pnpm lint && pnpm check:boundaries && pnpm test:unit && pnpm test:e2e && pnpm validate:docs && pnpm build && pnpm test:smoke"
+    "verify": "pnpm format:check && pnpm lint && pnpm check:boundaries && pnpm test:unit && pnpm test:integration && pnpm test:e2e && pnpm validate:docs && pnpm build && pnpm test:smoke"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.9",
     "@swc/cli": "0.8.1",
     "@swc/core": "1.16.1",
+    "@testcontainers/postgresql": "12.1.0",
     "@types/node": "24.10.1",
+    "@types/pg": "8.15.5",
+    "drizzle-kit": "0.31.10",
+    "drizzle-orm": "0.45.2",
+    "pg": "8.23.0",
     "typescript": "5.9.3",
     "vitest": "4.1.11"
   }

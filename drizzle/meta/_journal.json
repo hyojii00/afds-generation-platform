@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1787890694766,
+      "tag": "0000_create_generation_jobs",
+      "breakpoints": true
+    }
+  ]
+}

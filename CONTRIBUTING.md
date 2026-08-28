@@ -2,12 +2,17 @@
 
 ## Setup
 
-Use Node.js 24.19.0 and pnpm 11.22.0.
+Use Node.js 24.19.0, pnpm 11.22.0, and a running Docker engine.
 
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
+cp .env.example .env
+docker compose up -d --wait postgres
+pnpm db:migrate
 ```
+
+See `docs/runbooks/local-development.md` for local runtime and cleanup commands. Verification starts isolated PostgreSQL containers and does not reuse the development database.
 
 ## Branches and pull requests
 

@@ -9,13 +9,13 @@ Provide a synthetic, portfolio-safe reference for accepting asynchronous media-g
 - API clients that submit generation work and inspect its state.
 - Engineers reviewing how product requirements become code, evidence, and pull requests through AFDS.
 
-## Initial capability
+## Current capability
 
-A client can create a job for the local mock provider and retrieve the accepted job by identifier. The first loop stores jobs in process memory so that the HTTP contract can be proven before a persistence decision.
+A client can create a job for the local mock provider and retrieve the accepted job by identifier. Accepted jobs are persisted in PostgreSQL and remain retrievable after the API restarts against the same database.
 
 ## Planned evolution
 
-Later loops may add PostgreSQL persistence, Transactional Outbox/Inbox delivery, workers, provider adapters, authentication, observability, and a signaling state machine. Each capability requires its own active loop and pull request.
+Later loops may add reliable delivery, workers, provider adapters, authentication, observability, and a signaling state machine. Each capability requires its own active loop and pull request.
 
 ## Non-goals
 
