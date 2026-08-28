@@ -8,6 +8,7 @@ The repository demonstrates two things together:
 
 - A NestJS backend that evolves from job acceptance toward reliable asynchronous execution.
 - An Agent-First Development System (AFDS) where repository-owned plans, decision gates, tests, and evidence constrain AI-assisted work.
+- A Fastify runtime with SWC production compilation and a separate TypeScript type-safety gate.
 
 ## Current capability
 
@@ -45,7 +46,7 @@ pnpm verify
 pnpm dev:api
 ```
 
-The API listens on `http://localhost:3000`. No external service or credential is required in Active Loop 001. Jobs are intentionally stored in memory; PostgreSQL and asynchronous workers remain separate future loops.
+The API listens on `http://localhost:3000`. Use `pnpm build && pnpm start:api` to run the SWC-compiled output. No external service or credential is required in Active Loop 001. Jobs are intentionally stored in memory; PostgreSQL and asynchronous workers remain separate future loops.
 
 ## Portfolio safety
 

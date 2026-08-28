@@ -7,6 +7,7 @@ const requiredFiles = [
   "WORKFLOW.md",
   "docs/product/generation-platform.md",
   "docs/architecture/system.md",
+  "docs/architecture/decisions/0001-use-fastify-and-swc.md",
   "docs/plans/active-loop.md",
 ];
 

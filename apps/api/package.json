@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "swc src --out-dir dist --strip-leading-paths --config-file ../../.swcrc"
+  },
   "dependencies": {
     "@afds-generation-platform/generation": "workspace:*",
     "@nestjs/common": "11.2.1",

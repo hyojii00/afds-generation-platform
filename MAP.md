@@ -4,6 +4,7 @@
 | --- | --- |
 | Product purpose and boundaries | `docs/product/generation-platform.md` |
 | System boundaries and evolution | `docs/architecture/system.md` |
+| Runtime and compiler decision | `docs/architecture/decisions/0001-use-fastify-and-swc.md` |
 | AI-first delivery contract | `.afds/constitution.md`, `.afds/workflow.md` |
 | Current change scope and evidence | `docs/plans/active-loop.md` |
 | Generation job behavior | `packages/generation` |

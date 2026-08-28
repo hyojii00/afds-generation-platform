@@ -13,6 +13,7 @@ An API client can submit a mock-provider generation job and retrieve the same ac
 - AFDS repository ownership and workflow documents.
 - A framework-independent generation job model and application service.
 - A NestJS HTTP adapter with process-local storage.
+- Fastify runtime and SWC production compilation configuration.
 - Unit, HTTP E2E, documentation, type, lint, format, and build checks.
 
 ## Non-goals
@@ -27,7 +28,8 @@ An API client can submit a mock-provider generation job and retrieve the same ac
 2. `GET /v1/jobs/:id` returns the same job accepted during the process lifetime.
 3. Invalid creation input returns `400`; an unknown identifier returns `404`.
 4. The generation package imports no NestJS or platform adapter code.
-5. `pnpm verify` passes.
+5. The API directly depends on Fastify—not Express—and the SWC-built API serves the same HTTP contract.
+6. `pnpm verify` passes.
 
 ## Decision gates
 
@@ -40,7 +42,8 @@ An API client can submit a mock-provider generation job and retrieve the same ac
 | --- | --- |
 | `pnpm test:unit` | Passed — 2 tests |
 | `pnpm test:e2e` | Passed — 3 tests |
-| `pnpm check:boundaries` | Passed |
-| `pnpm verify` | Passed |
-| Manual `POST` → `GET` HTTP round trip | Passed — retrieved response matched created response |
-| Diff critique | Passed — no proprietary material, unrelated changes, or next-loop implementation found |
+| `pnpm check:boundaries` | Passed — Fastify required and Express rejected |
+| `pnpm verify` | Passed — includes typecheck, SWC build, and built-API smoke test |
+| SWC-built API `POST` → `GET` smoke test | Passed — retrieved response matched created response |
+| Direct runtime dependency check | Passed — Fastify present, Express absent |
+| Diff critique | Passed — only runtime, compiler, verification, and owning documentation changed |

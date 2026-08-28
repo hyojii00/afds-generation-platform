@@ -10,8 +10,10 @@
     "pnpm": "11.22.0"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "dev:api": "tsx apps/api/src/main.ts",
+    "build": "pnpm clean && pnpm typecheck && pnpm --filter @afds-generation-platform/generation build && pnpm --filter @afds-generation-platform/api build",
+    "clean": "node scripts/clean.mjs",
+    "dev:api": "pnpm build && pnpm start:api",
+    "start:api": "node apps/api/dist/main.js",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint .",
@@ -19,13 +21,15 @@
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:smoke": "node scripts/smoke-built-api.mjs",
     "validate:docs": "node scripts/validate-docs.mjs",
-    "verify": "pnpm format:check && pnpm lint && pnpm check:boundaries && pnpm typecheck && pnpm test:unit && pnpm test:e2e && pnpm validate:docs && pnpm build"
+    "verify": "pnpm format:check && pnpm lint && pnpm check:boundaries && pnpm test:unit && pnpm test:e2e && pnpm validate:docs && pnpm build && pnpm test:smoke"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.9",
+    "@swc/cli": "0.8.1",
+    "@swc/core": "1.16.1",
     "@types/node": "24.10.1",
-    "tsx": "4.23.12",
     "typescript": "5.9.3",
     "vitest": "4.1.11"
   }

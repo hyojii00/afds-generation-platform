@@ -24,4 +24,15 @@ for (const path of await sourceFiles(sourceRoot)) {
   }
 }
 
-console.log("Generation package boundary is intact.");
+const apiPackage = JSON.parse(await readFile("apps/api/package.json", "utf8"));
+const apiDependencies = apiPackage.dependencies ?? {};
+
+if (!apiDependencies["@nestjs/platform-fastify"]) {
+  throw new Error("API must directly depend on @nestjs/platform-fastify");
+}
+
+if (apiDependencies["@nestjs/platform-express"]) {
+  throw new Error("API must not directly depend on @nestjs/platform-express");
+}
+
+console.log("Generation and Fastify adapter boundaries are intact.");
