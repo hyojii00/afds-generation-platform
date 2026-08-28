@@ -1,7 +1,6 @@
 import { access, readFile } from "node:fs/promises";
 
 const candidateLoopFiles = [
-  "docs/plans/candidates/003-execute-jobs-reliably.md",
   "docs/plans/candidates/004-isolate-provider-integrations.md",
 ];
 
@@ -17,6 +16,7 @@ const requiredFiles = [
   "docs/runbooks/local-development.md",
   "docs/plans/active-loop.md",
   "docs/plans/completed/001-accept-and-retrieve-generation-jobs.md",
+  "docs/plans/completed/002-persist-generation-jobs.md",
   "docs/plans/candidates/README.md",
   ...candidateLoopFiles,
 ];
@@ -40,12 +40,12 @@ for (const heading of [
   }
 }
 
-if (!activeLoop.startsWith("# Active Loop 002")) {
-  throw new Error("Active loop must be Loop 002");
+if (!activeLoop.startsWith("# Active Loop 003")) {
+  throw new Error("Active loop must be Loop 003");
 }
 
-if (!activeLoop.includes("`ready_for_review`")) {
-  throw new Error("Active Loop 002 must be ready for review");
+if (!activeLoop.includes("`implementing`")) {
+  throw new Error("Active Loop 003 must be implementing");
 }
 
 for (const path of candidateLoopFiles) {
