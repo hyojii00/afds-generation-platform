@@ -16,7 +16,7 @@ try {
     await migrationPool.end();
   }
 
-  const port = 30_000 + (process.pid % 20_000);
+  const port = 50_000 + (process.pid % 10_000);
   const apiUrl = `http://127.0.0.1:${port}`;
   const api = startBuiltProcess("apps/api/dist/main.js", {
     DATABASE_URL: databaseUrl,
@@ -35,7 +35,7 @@ try {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        prompt: "SWC-built Fastify API",
+        prompt: "SWC-built generation worker",
         provider: "mock",
       }),
       signal: AbortSignal.timeout(1_000),
@@ -46,22 +46,56 @@ try {
       );
     }
     const created = await createdResponse.json();
+    if (created.status !== "queued") {
+      throw new Error(`Expected a queued job, received ${created.status}`);
+    }
 
-    const retrievedResponse = await fetch(`${apiUrl}/v1/jobs/${created.id}`, {
-      signal: AbortSignal.timeout(1_000),
+    const worker = startBuiltProcess("apps/api/dist/worker.main.js", {
+      DATABASE_URL: databaseUrl,
     });
-    if (retrievedResponse.status !== 200) {
+
+    let workerExitCode;
+
+    try {
+      const executed = await waitFor(
+        "the built worker to finish the job",
+        worker,
+        async () => {
+          const response = await fetch(`${apiUrl}/v1/jobs/${created.id}`, {
+            signal: AbortSignal.timeout(1_000),
+          });
+          const job = await response.json();
+          return job.status === "queued" || job.status === "processing"
+            ? undefined
+            : job;
+        },
+      );
+
+      if (executed.status !== "succeeded") {
+        throw new Error(
+          `Expected the worker to succeed, received ${executed.status}`,
+        );
+      }
+
+      if (
+        JSON.stringify(executed) !==
+        JSON.stringify({ ...created, status: "succeeded" })
+      ) {
+        throw new Error(
+          "Built worker changed a field other than the job status",
+        );
+      }
+    } finally {
+      workerExitCode = await worker.stop();
+    }
+
+    if (workerExitCode !== 0) {
       throw new Error(
-        `Expected retrieve status 200, received ${retrievedResponse.status}`,
+        `Built worker exited with ${workerExitCode} instead of stopping cleanly:\n${worker.output}`,
       );
     }
-    const retrieved = await retrievedResponse.json();
 
-    if (JSON.stringify(retrieved) !== JSON.stringify(created)) {
-      throw new Error("Built API returned a different job than it created");
-    }
-
-    console.log("SWC-built Fastify API smoke test passed.");
+    console.log("SWC-built generation worker smoke test passed.");
   } finally {
     await api.stop();
   }

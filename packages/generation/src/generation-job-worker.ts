@@ -1,0 +1,121 @@
+import type { GenerationProvider } from "./generation-jobs.js";
+import { assertTransition } from "./job-lifecycle.js";
+
+export type GenerationJobLease = Readonly<{
+  jobId: string;
+  prompt: string;
+  provider: GenerationProvider;
+  attempt: number;
+  fencingToken: string;
+}>;
+
+export type ExecutionPolicy = Readonly<{
+  maxAttempts: number;
+  retryBackoffSeconds: readonly number[];
+  leaseSeconds: number;
+}>;
+
+export const defaultExecutionPolicy: ExecutionPolicy = {
+  maxAttempts: 3,
+  retryBackoffSeconds: [1, 2],
+  leaseSeconds: 30,
+};
+
+/**
+ * Seconds to wait before the failed attempt becomes claimable again, or
+ * undefined when the attempt limit leaves no retry.
+ */
+export function retryDelaySeconds(
+  policy: ExecutionPolicy,
+  failedAttempt: number,
+): number | undefined {
+  if (failedAttempt >= policy.maxAttempts) {
+    return undefined;
+  }
+
+  return policy.retryBackoffSeconds[failedAttempt - 1];
+}
+
+/** A failure that another attempt may resolve, within the attempt limit. */
+export class RetryableGenerationError extends Error {}
+
+export type GenerationJobExecutor = (
+  lease: GenerationJobLease,
+) => Promise<void>;
+
+export interface GenerationJobQueue {
+  claim(input: {
+    leaseSeconds: number;
+    maxAttempts: number;
+  }): Promise<GenerationJobLease | undefined>;
+  /** Each result method returns false when the lease no longer owns the job. */
+  succeed(lease: GenerationJobLease): Promise<boolean>;
+  retry(
+    lease: GenerationJobLease,
+    input: { availableInSeconds: number; reason: string },
+  ): Promise<boolean>;
+  fail(lease: GenerationJobLease, input: { reason: string }): Promise<boolean>;
+  recoverExpiredLeases(input: {
+    maxAttempts: number;
+  }): Promise<{ requeued: number; failed: number }>;
+}
+
+export type GenerationJobOutcome =
+  | "idle"
+  | "succeeded"
+  | "retrying"
+  | "failed"
+  | "lost";
+
+export class GenerationJobWorker {
+  constructor(
+    private readonly queue: GenerationJobQueue,
+    private readonly execute: GenerationJobExecutor,
+    private readonly policy: ExecutionPolicy = defaultExecutionPolicy,
+  ) {}
+
+  async runOnce(): Promise<GenerationJobOutcome> {
+    await this.queue.recoverExpiredLeases({
+      maxAttempts: this.policy.maxAttempts,
+    });
+
+    const lease = await this.queue.claim({
+      leaseSeconds: this.policy.leaseSeconds,
+      maxAttempts: this.policy.maxAttempts,
+    });
+
+    if (!lease) {
+      return "idle";
+    }
+
+    try {
+      await this.execute(lease);
+    } catch (error) {
+      return await this.applyFailure(lease, error);
+    }
+
+    assertTransition("processing", "succeeded");
+    return (await this.queue.succeed(lease)) ? "succeeded" : "lost";
+  }
+
+  private async applyFailure(
+    lease: GenerationJobLease,
+    error: unknown,
+  ): Promise<GenerationJobOutcome> {
+    const reason = error instanceof Error ? error.message : String(error);
+    const availableInSeconds =
+      error instanceof RetryableGenerationError
+        ? retryDelaySeconds(this.policy, lease.attempt)
+        : undefined;
+
+    if (availableInSeconds === undefined) {
+      assertTransition("processing", "failed");
+      return (await this.queue.fail(lease, { reason })) ? "failed" : "lost";
+    }
+
+    assertTransition("processing", "queued");
+    return (await this.queue.retry(lease, { availableInSeconds, reason }))
+      ? "retrying"
+      : "lost";
+  }
+}
