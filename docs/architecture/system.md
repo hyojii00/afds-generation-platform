@@ -17,6 +17,8 @@ flowchart LR
   Port -. implemented by .-> Mock[In-process mock provider]
   Port -. implemented by .-> Http[HTTP provider adapter]
   Http --> External[(Provider HTTP API)]
+  External -->|POST /v1/provider-callbacks/:id/:token| API
+  API --> Queue
 ```
 
 The generation package owns job state, lifecycle transitions, execution policy, the repository port, and the queue port without importing NestJS, database, or worker entrypoint code. The API owns HTTP validation, status mapping, the PostgreSQL adapters, and database lifecycle. The worker is a separate process built from the same package and shares only PostgreSQL with the API.
@@ -31,7 +33,7 @@ The API uses Fastify rather than Express. TypeScript performs static verificatio
 
 ## Intentional limitation
 
-Accepted jobs survive API and worker restarts against the same migrated database. Neither process runs migrations automatically, and both fail startup when configuration, connectivity, or schema state is unusable. Leasing fences persisted state application; the idempotency key is what keeps a repeated provider call from duplicating accepted work. Providers must answer within the request timeout: asynchronous completion notices are not implemented. Retry backoffs are fixed, without jitter or global rate limiting.
+Accepted jobs survive API and worker restarts against the same migrated database. Neither process runs migrations automatically, and both fail startup when configuration, connectivity, or schema state is unusable. Leasing fences persisted state application; the idempotency key is what keeps a repeated provider call from duplicating accepted work. A provider that answers later must call the completion route inside the wait deadline; nothing polls it. Retry backoffs are fixed, without jitter or global rate limiting.
 
 ## Provider boundary
 
@@ -41,10 +43,18 @@ Configuration chooses the implementation: the in-process mock provider by defaul
 
 Failures are normalized into two kinds. `429`, `5xx`, connection failure, and timeout are transient and enter the Loop 003 retry path; every other `4xx` and any success body without a usable identifier are permanent and end the job on its first attempt. Normalized failures carry the provider status and a fixed reason, never a response body or a credential.
 
+## Completion boundary
+
+A provider may answer `completed` or `accepted`. Accepted work moves to `awaiting_provider`: the worker persists the reference, releases its lease and fencing token, records a deadline, and claims something else. Clients keep the four statuses Loop 003 defined, so an awaiting job reports as `processing`.
+
+Every claim issues one callback token and stores only its SHA-256 hash. The adapter composes the callback URL from `PUBLIC_CALLBACK_BASE_URL`, the job identifier, and that token. A notice applies only while the row is `awaiting_provider`, carries the current token's hash, and its deadline has not passed; the same statement clears the hash, so a second delivery, a stale attempt's token, or an unknown job matches nothing. Every rejection answers `404`, so the route reveals nothing. [ADR 0003](decisions/0003-authenticate-provider-callbacks.md) records why the token is per attempt rather than a shared secret or a signature.
+
+A wait whose deadline passes is recovered by the worker's recovery pass as a retryable failure: it returns to `queued` behind the Loop 003 backoff while attempts remain, and becomes `failed` on the last one. Loop 004's idempotency key keeps the resubmitted attempt from duplicating accepted work.
+
 ## Evolution gates
 
 - Persistent schema changes require a versioned forward migration and adapter evidence.
-- Asynchronous provider completion requires a waiting state, an authenticated inbound notice, and a deadline sweeper.
+- A second inbound route or another notice sender requires its own authentication decision.
 - A second provider adapter requires the contract suite to run against it unchanged.
 - External providers require mock-first contract tests and credential isolation.
 - Authentication requires a threat model and key-rotation decision.

@@ -12,7 +12,7 @@ The repository demonstrates two things together:
 
 ## Current capability
 
-The implemented platform accepts a job for the local mock provider, persists it in PostgreSQL, executes it in an independent worker process through a provider-neutral port, and reports the job's persisted lifecycle status.
+The implemented platform accepts a job for the local mock provider, persists it in PostgreSQL, executes it in an independent worker process through a provider-neutral port, settles it directly or through an authenticated provider completion notice, and reports the job's lifecycle status.
 
 ```http
 POST /v1/jobs

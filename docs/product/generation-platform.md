@@ -11,11 +11,11 @@ Provide a synthetic, portfolio-safe reference for accepting asynchronous media-g
 
 ## Current capability
 
-A client can create a job for the local mock provider and retrieve it by identifier. Accepted jobs are persisted in PostgreSQL, executed asynchronously by an independent worker through a provider-neutral port, and reported as `queued`, `processing`, `succeeded`, or `failed`. Jobs remain retrievable after either process restarts against the same database.
+A client can create a job for the local mock provider and retrieve it by identifier. Accepted jobs are persisted in PostgreSQL, executed asynchronously by an independent worker through a provider-neutral port, settled either directly or by an authenticated provider completion notice, and reported as `queued`, `processing`, `succeeded`, or `failed`. Jobs remain retrievable after either process restarts against the same database.
 
 ## Planned evolution
 
-Later loops may add asynchronous provider completion, authentication, observability, and a signaling state machine. Each capability requires its own active loop and pull request.
+Later loops may add authentication, observability, and a signaling state machine. Each capability requires its own active loop and pull request.
 
 ## Non-goals
 

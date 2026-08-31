@@ -2,7 +2,7 @@
 
 ## State
 
-`implementing`
+`ready_for_review`
 
 ## Target
 
@@ -68,14 +68,14 @@ A generation the provider accepts asynchronously reaches its terminal state thro
 
 | Check | Result |
 | --- | --- |
-| Accepted answer releases the lease into a bounded wait | Pending |
-| Notice applied exactly once | Pending |
-| Rejected notices change nothing and stay indistinguishable | Pending |
-| Callback token hashing and per-attempt rotation | Pending |
-| Deadline recovery inside the attempt budget | Pending |
-| Asynchronous round trip against the running API | Pending |
-| Unchanged HTTP contract and domain boundaries | Pending |
-| Callback and deadline migration | Pending |
-| SWC-built API and worker smoke tests | Pending |
-| `pnpm verify` | Pending |
-| Diff critique | Pending |
+| Accepted answer releases the lease into a bounded wait | Passed — `pnpm test:integration` parks the job in `awaiting_provider` with its reference and deadline, clears the lease and fencing token, keeps the attempt at 1, and leaves nothing claimable |
+| Notice applied exactly once | Passed — `pnpm test:integration` settles an awaiting job with the attempt's token and proves the second, contradicting delivery changes nothing |
+| Rejected notices change nothing and stay indistinguishable | Passed — `pnpm test:integration` rejects a wrong token, an unknown identifier, a malformed identifier, a job that is not awaiting, and an expired deadline; `pnpm test:e2e` answers `404` for every unauthorized or unknown notice |
+| Callback token hashing and per-attempt rotation | Passed — `pnpm test:integration` finds only the SHA-256 hash in the row and proves a reclaimed attempt's new token applies while the previous one no longer does |
+| Deadline recovery inside the attempt budget | Passed — `pnpm test:integration` requeues a missed notice behind the 1-second backoff with its reason and fails the last attempt |
+| Asynchronous round trip against the running API | Passed — `pnpm test:e2e` submits through the HTTP adapter to a local provider that answers `202` and calls back into the listening API, ending `succeeded` for a success notice and `failed` for a failure notice |
+| Unchanged HTTP contract and domain boundaries | Passed — `pnpm test:e2e` (9 tests) reports an awaiting job as `processing` with exactly its existing fields and keeps `400` and `404`; `pnpm check:boundaries` keeps transport, configuration, and adapters out of the generation package |
+| Callback and deadline migration | Passed — `pnpm test:integration` migrates a Loop 002 database through `drizzle/0003_add_provider_callbacks.sql` and executes the preserved job to a terminal state |
+| SWC-built API and worker smoke tests | Passed — `pnpm test:smoke` and `pnpm test:smoke:worker` |
+| `pnpm verify` | Passed — formatting, lint, boundaries, 79 tests (26 unit, 44 integration, 9 E2E), docs, typecheck, SWC build, and both built-process smoke tests |
+| Diff critique | Passed — `git diff --check`; reviewed for scope, domain coupling, public-contract regression, and speculative abstractions |
