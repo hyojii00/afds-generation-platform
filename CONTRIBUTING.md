@@ -17,7 +17,7 @@ See `docs/runbooks/local-development.md` for local runtime and cleanup commands.
 ## Branches and pull requests
 
 - Branch from `main` with `feat/<short-name>`, `fix/<short-name>`, or `docs/<short-name>`.
-- Keep one AFDS active loop in one pull request.
+- Keep one AFDS active loop in one pull request, from its activation commit through its terminal state.
 - Keep commits focused on the observable result defined by the active loop.
 - Update the active loop's evidence ledger with commands actually run.
 - Run `pnpm verify` before opening or updating a pull request.

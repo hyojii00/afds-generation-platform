@@ -1,4 +1,10 @@
+import {
+  executeMockGeneration,
+  GenerationJobWorker,
+} from "@afds-generation-platform/generation";
 import { AppModule } from "../src/app.module.js";
+import { DatabaseService } from "../src/database/database.service.js";
+import { PostgresGenerationJobQueue } from "../src/database/postgres-generation-job.queue.js";
 import { Test } from "@nestjs/testing";
 import {
   FastifyAdapter,
@@ -71,6 +77,47 @@ describe("generation jobs API", () => {
     expect(retrieved.body).toEqual(created.body);
     await restartedApp.close();
   });
+
+  it("accepts a job as claimable work and reports its lifecycle status", async () => {
+    const app = await createApp();
+
+    try {
+      await expectLifecycleStatus(app);
+    } finally {
+      await app.close();
+    }
+  });
+
+  async function expectLifecycleStatus(app: NestFastifyApplication) {
+    const created = await request(app.getHttpServer())
+      .post("/v1/jobs")
+      .send({ prompt: "A cinematic sunrise over Seoul", provider: "mock" })
+      .expect(201);
+
+    expect(created.body).toMatchObject({ status: "queued" });
+    const claimable = await adminPool.query(
+      "select 1 from generation_jobs where id = $1 and status = 'queued' and attempt_count = 0 and available_at <= now()",
+      [created.body.id],
+    );
+    expect(claimable.rowCount).toBe(1);
+
+    const database = new DatabaseService(databaseUrl);
+    try {
+      const worker = new GenerationJobWorker(
+        new PostgresGenerationJobQueue(database),
+        executeMockGeneration,
+      );
+      await expect(worker.runOnce()).resolves.toBe("succeeded");
+    } finally {
+      await database.close();
+    }
+
+    const retrieved = await request(app.getHttpServer())
+      .get(`/v1/jobs/${created.body.id}`)
+      .expect(200);
+
+    expect(retrieved.body).toEqual({ ...created.body, status: "succeeded" });
+  }
 
   it("rejects invalid creation input", async () => {
     const app = await createApp();

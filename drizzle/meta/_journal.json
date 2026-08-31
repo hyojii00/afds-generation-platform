@@ -8,6 +8,13 @@
       "when": 1787890694766,
       "tag": "0000_create_generation_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788148135133,
+      "tag": "0001_add_job_execution_metadata",
+      "breakpoints": true
     }
   ]
 }

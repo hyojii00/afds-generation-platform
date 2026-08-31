@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 const sourceRoot = "packages/generation/src";
 const forbiddenImport =
-  /from\s+["'](?:@nestjs\/|fastify(?:\/|["'])|pg(?:\/|["'])|drizzle)/;
+  /from\s+["'](?:@nestjs\/|fastify(?:\/|["'])|pg(?:\/|["'])|drizzle|[^"']*apps\/api)/;
 
 async function sourceFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
