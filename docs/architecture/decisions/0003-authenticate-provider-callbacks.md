@@ -14,7 +14,7 @@ A shared secret or a signature scheme both require distributing and rotating a r
 
 - Issue one callback token per claim, inside the same statement that takes the lease, and store only its SHA-256 hash.
 - Compose the callback URL in the provider adapter from `PUBLIC_CALLBACK_BASE_URL`, the job identifier, and the token; the domain never sees a URL.
-- Apply a notice only when the row is `awaiting_provider`, carries that token's hash, and its deadline has not passed, and clear the hash in the same statement.
+- Apply a notice when the row still belongs to the attempt that issued the token — `processing` or `awaiting_provider`, with an unexpired deadline once one exists — and clear the hash in the same statement. A provider may answer before the worker finishes parking the job; the parking update then owns nothing and the worker reports a lost lease.
 - Answer every rejected notice with `404`, whatever failed.
 - Keep `awaiting_provider` out of the HTTP response and report it as `processing`.
 - Recover a wait whose deadline passed as a retryable failure inside the existing three-attempt budget.

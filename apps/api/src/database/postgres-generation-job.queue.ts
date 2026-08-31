@@ -35,7 +35,12 @@ function countRecovered(rows: RecoveredRow[]): {
 
 /** The configured backoff for the attempt that just failed, in SQL. */
 function backoffCase(retryBackoffSeconds: readonly number[]): SQL {
-  const last = retryBackoffSeconds.at(-1) ?? 0;
+  const last = retryBackoffSeconds.at(-1);
+
+  if (last === undefined) {
+    return sql`0::double precision`;
+  }
+
   const branches = retryBackoffSeconds.map(
     (seconds, index) => sql`when ${index + 1} then ${seconds}`,
   );
@@ -148,9 +153,13 @@ export class PostgresGenerationJobQueue implements GenerationJobQueue {
   }
 
   /**
-   * Applies a completion notice. The awaiting state, the attempt's token hash,
-   * and an unexpired deadline stand in for the lease: a notice for a previous
-   * attempt, a wrong token, or a second delivery matches nothing.
+   * Applies a completion notice. The attempt's token hash stands in for the
+   * lease: a notice for a previous attempt, a wrong token, or a second
+   * delivery matches nothing.
+   *
+   * A provider can answer before the worker finishes parking the job, so a
+   * notice also applies while the row is still `processing`. The parking
+   * update then finds no owned row and the worker reports a lost lease.
    */
   async applyProviderNotice(
     jobId: string,
@@ -165,16 +174,20 @@ export class PostgresGenerationJobQueue implements GenerationJobQueue {
       update generation_jobs
          set status = ${notice.status},
              provider_reference = coalesce(
-               ${notice.status === "succeeded" ? (notice.reference ?? null) : null},
+               nullif(btrim(${
+                 notice.status === "succeeded"
+                   ? (notice.reference ?? null)
+                   : null
+}), ''),
                provider_reference
              ),
              failure_reason = ${notice.status === "failed" ? notice.reason : null},
              awaiting_deadline = null,
              callback_token_hash = null
        where id = ${jobId}
-         and status = 'awaiting_provider'
+         and status in ('processing', 'awaiting_provider')
          and callback_token_hash = ${callbackTokenHash}
-         and awaiting_deadline > now()
+         and (awaiting_deadline is null or awaiting_deadline > now())
       returning id
     `);
 

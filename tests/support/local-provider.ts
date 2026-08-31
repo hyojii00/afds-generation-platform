@@ -6,6 +6,8 @@ export type LocalProvider = {
   url: string;
   /** Notices the provider sent back, in order. */
   notices(): ReadonlyArray<{ url: string; status: number }>;
+  /** The callback URL the most recent submission carried. */
+  receivedCallbackUrl(): string | undefined;
   /** The path of the most recent request, to prove base-URL handling. */
   receivedPath(): string | undefined;
   /** How many times the provider actually did the work for a key. */
@@ -24,6 +26,7 @@ export async function startLocalProvider(): Promise<LocalProvider> {
   const executions = new Map<string, number>();
   let authorization: string | undefined;
   let path: string | undefined;
+  let lastCallbackUrl: string | undefined;
   const sent: { url: string; status: number }[] = [];
 
   async function notify(url: string, body: unknown): Promise<void> {
@@ -58,6 +61,7 @@ export async function startLocalProvider(): Promise<LocalProvider> {
         typeof submitted.callbackUrl === "string"
           ? submitted.callbackUrl
           : undefined;
+      lastCallbackUrl = callbackUrl;
 
       const answer = (status: number, payload?: unknown) => {
         response.writeHead(status, { "content-type": "application/json" });
@@ -72,6 +76,13 @@ export async function startLocalProvider(): Promise<LocalProvider> {
       if (prompt.includes("stalled")) {
         response.writeHead(200, { "content-type": "application/json" });
         response.write('{"id": "par');
+        return;
+      }
+
+      if (prompt.includes("silent")) {
+        answer(202, {
+          id: createHash("sha256").update(key).digest("hex").slice(0, 16),
+        });
         return;
       }
 
@@ -94,15 +105,8 @@ export async function startLocalProvider(): Promise<LocalProvider> {
                 reason: "provider could not render the prompt",
               }
             : { status: "succeeded", reference: `http:${reference}` };
-          setTimeout(() => void notify(callbackUrl, notice), 20);
+          setImmediate(() => void notify(callbackUrl, notice));
         }
-        return;
-      }
-
-      if (prompt.includes("silent")) {
-        answer(202, {
-          id: createHash("sha256").update(key).digest("hex").slice(0, 16),
-        });
         return;
       }
 
@@ -168,6 +172,7 @@ export async function startLocalProvider(): Promise<LocalProvider> {
     url: `http://127.0.0.1:${address.port}`,
     receivedPath: () => path,
     notices: () => sent,
+    receivedCallbackUrl: () => lastCallbackUrl,
     executions: (key) => executions.get(key) ?? 0,
     receivedAuthorization: () => authorization,
     close: () =>

@@ -24,8 +24,12 @@ type NoticeBody = {
 
 function parseNotice(body: NoticeBody): ProviderNotice {
   if (body?.status === "succeeded") {
-    if (body.reference !== undefined && typeof body.reference !== "string") {
-      throw new BadRequestException("reference must be a string");
+    if (body.reference === undefined) {
+      return { status: "succeeded" };
+    }
+
+    if (typeof body.reference !== "string" || body.reference.trim() === "") {
+      throw new BadRequestException("reference must be a non-empty string");
     }
 
     return { status: "succeeded", reference: body.reference };

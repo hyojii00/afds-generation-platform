@@ -199,7 +199,7 @@ describe("provider completion notices", () => {
     expect(await readJob(id)).toMatchObject({ status: "awaiting_provider" });
   });
 
-  it("rejects a notice for a job that is not awaiting a provider", async () => {
+  it("accepts a notice that arrives before the job is parked", async () => {
     const id = await insertQueuedJob();
     const lease = await queue.claim(defaultExecutionPolicy);
     if (!lease) {
@@ -209,9 +209,46 @@ describe("provider completion notices", () => {
     await expect(
       queue.applyProviderNotice(id, hashCallbackToken(lease.callbackToken), {
         status: "succeeded",
+        reference: "http:early",
+      }),
+    ).resolves.toBe(true);
+    expect(await readJob(id)).toMatchObject({
+      status: "succeeded",
+      provider_reference: "http:early",
+    });
+
+    await expect(
+      queue.awaitProvider(lease, {
+        reference: `http:${id}`,
+        deadlineSeconds: defaultExecutionPolicy.awaitSeconds,
       }),
     ).resolves.toBe(false);
-    expect(await readJob(id)).toMatchObject({ status: "processing" });
+    expect(await readJob(id)).toMatchObject({ status: "succeeded" });
+  });
+
+  it("rejects a notice for a job that holds no callback token", async () => {
+    const id = await insertQueuedJob();
+
+    await expect(
+      queue.applyProviderNotice(id, hashCallbackToken(randomUUID()), {
+        status: "succeeded",
+      }),
+    ).resolves.toBe(false);
+    expect(await readJob(id)).toMatchObject({ status: "queued" });
+  });
+
+  it("keeps the accepted reference when a notice carries none", async () => {
+    const { id, lease } = await claimAndPark();
+
+    await expect(
+      queue.applyProviderNotice(id, hashCallbackToken(lease.callbackToken), {
+        status: "succeeded",
+      }),
+    ).resolves.toBe(true);
+    expect(await readJob(id)).toMatchObject({
+      status: "succeeded",
+      provider_reference: `http:${id}`,
+    });
   });
 
   it("issues a new callback token for every attempt", async () => {

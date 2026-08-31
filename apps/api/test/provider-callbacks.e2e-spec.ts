@@ -91,9 +91,6 @@ describe("provider completion callbacks", () => {
 
     await expect(worker.runOnce()).resolves.toBe("awaiting");
 
-    const awaiting = await readStatus(created.id);
-    expect(awaiting).toEqual({ ...created, status: "processing" });
-
     for (let attempt = 0; attempt < 50; attempt += 1) {
       const job = await readStatus(created.id);
       if (job.status === "succeeded") {
@@ -113,6 +110,17 @@ describe("provider completion callbacks", () => {
     }
 
     throw new Error("the provider notice never settled the job");
+  });
+
+  it("reports work waiting for a provider as processing", async () => {
+    const created = await createJob("A silent asynchronous sunrise");
+
+    await expect(worker.runOnce()).resolves.toBe("awaiting");
+
+    expect(await readStatus(created.id)).toEqual({
+      ...created,
+      status: "processing",
+    });
   });
 
   it("carries a provider failure notice into a failed job", async () => {

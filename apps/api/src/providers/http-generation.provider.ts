@@ -15,7 +15,12 @@ export type HttpProviderConfig = Readonly<{
 }>;
 
 export function callbackPath(jobId: string, token: string): string {
-  return `/v1/provider-callbacks/${jobId}/${token}`;
+  return `v1/provider-callbacks/${jobId}/${token}`;
+}
+
+/** Appends the trailing slash that keeps a base URL's own path in resolution. */
+function resolvable(url: string): string {
+  return url.endsWith("/") ? url : `${url}/`;
 }
 
 type ProviderBody = { id?: unknown };
@@ -34,18 +39,27 @@ async function discard(response: Response): Promise<void> {
  */
 export class HttpGenerationProvider implements GenerationProviderPort {
   private readonly endpoint: URL;
+  private readonly callbackBase: string | undefined;
 
   constructor(private readonly config: HttpProviderConfig) {
-    const base = config.baseUrl.endsWith("/")
-      ? config.baseUrl
-      : `${config.baseUrl}/`;
-
     try {
-      this.endpoint = new URL("generations", base);
+      this.endpoint = new URL("generations", resolvable(config.baseUrl));
     } catch {
       throw new Error(
         `PROVIDER_BASE_URL is not a valid URL: ${config.baseUrl}`,
       );
+    }
+
+    if (config.callbackBaseUrl !== undefined) {
+      this.callbackBase = resolvable(config.callbackBaseUrl);
+
+      try {
+        new URL(callbackPath("id", "token"), this.callbackBase);
+      } catch {
+        throw new Error(
+          `PUBLIC_CALLBACK_BASE_URL is not a valid URL: ${config.callbackBaseUrl}`,
+        );
+      }
     }
   }
 
@@ -74,7 +88,7 @@ export class HttpGenerationProvider implements GenerationProviderPort {
       return { status: "completed", reference };
     }
 
-    if (!this.config.callbackBaseUrl) {
+    if (!this.callbackBase) {
       throw new PermanentProviderError(
         "provider accepted the work but no callback URL is configured",
         response.status,
@@ -111,13 +125,13 @@ export class HttpGenerationProvider implements GenerationProviderPort {
   }
 
   private callbackUrl(request: ProviderRequest): string | undefined {
-    if (!this.config.callbackBaseUrl) {
+    if (!this.callbackBase) {
       return undefined;
     }
 
     return new URL(
       callbackPath(request.jobId, request.callbackToken),
-      this.config.callbackBaseUrl,
+      this.callbackBase,
     ).toString();
   }
 
