@@ -17,7 +17,7 @@ import {
 const apiKey = "provider-secret-key";
 
 function requestFor(prompt: string, jobId = randomUUID()): ProviderRequest {
-  return { jobId, prompt, provider: "mock" };
+  return { jobId, prompt, provider: "mock", callbackToken: randomUUID() };
 }
 
 describe("generation provider contract", () => {

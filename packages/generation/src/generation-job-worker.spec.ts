@@ -14,8 +14,10 @@ import {
 
 type RecordedCall =
   | { kind: "recover"; maxAttempts: number }
+  | { kind: "recover-waits"; maxAttempts: number }
   | { kind: "claim"; leaseSeconds: number; maxAttempts: number }
   | { kind: "succeed"; reference: string }
+  | { kind: "await"; reference: string; deadlineSeconds: number }
   | { kind: "retry"; availableInSeconds: number; reason: string }
   | { kind: "fail"; reason: string };
 
@@ -54,6 +56,23 @@ class RecordingQueue implements GenerationJobQueue {
     this.calls.push({ kind: "recover", ...input });
     return { requeued: 0, failed: 0 };
   }
+
+  async recoverExpiredWaits(input: { maxAttempts: number }) {
+    this.calls.push({ kind: "recover-waits", maxAttempts: input.maxAttempts });
+    return { requeued: 0, failed: 0 };
+  }
+
+  async awaitProvider(
+    _lease: GenerationJobLease,
+    input: { reference: string; deadlineSeconds: number },
+  ) {
+    this.calls.push({ kind: "await", ...input });
+    return this.applied;
+  }
+
+  async applyProviderNotice() {
+    return this.applied;
+  }
 }
 
 function failingProvider(error: Error): GenerationProviderPort {
@@ -72,6 +91,7 @@ function leaseFor(attempt: number): GenerationJobLease {
     status: "processing",
     attempt,
     fencingToken: "0c2a1f16-3d0c-4a5e-9f16-6a29f1d1b0f5",
+    callbackToken: "f2ec1f0b-9a1a-4c53-90f4-2b1c6a2b7c11",
   };
 }
 
@@ -96,6 +116,7 @@ describe("GenerationJobWorker", () => {
     ).resolves.toBe("idle");
     expect(queue.calls).toEqual([
       { kind: "recover", maxAttempts: 3 },
+      { kind: "recover-waits", maxAttempts: 3 },
       { kind: "claim", leaseSeconds: 30, maxAttempts: 3 },
     ]);
   });
@@ -164,7 +185,12 @@ describe("GenerationJobWorker", () => {
   it("reuses the last backoff when the policy configures fewer than it allows", () => {
     expect(
       retryDelaySeconds(
-        { maxAttempts: 5, retryBackoffSeconds: [1, 2], leaseSeconds: 30 },
+        {
+          maxAttempts: 5,
+          retryBackoffSeconds: [1, 2],
+          leaseSeconds: 30,
+          awaitSeconds: 60,
+        },
         3,
       ),
     ).toBe(2);
@@ -177,6 +203,22 @@ describe("GenerationJobWorker", () => {
       new GenerationJobWorker(queue, mockGenerationProvider).runOnce(),
     ).rejects.toBeInstanceOf(InvalidGenerationJobTransitionError);
     expect(queue.calls.some((call) => call.kind === "succeed")).toBe(false);
+  });
+
+  it("parks work the provider accepted and releases the lease", async () => {
+    const queue = new RecordingQueue(leaseFor(1));
+    const worker = new GenerationJobWorker(queue, {
+      async generate() {
+        return { status: "accepted", reference: "http:accepted" };
+      },
+    });
+
+    await expect(worker.runOnce()).resolves.toBe("awaiting");
+    expect(queue.calls.at(-1)).toEqual({
+      kind: "await",
+      reference: "http:accepted",
+      deadlineSeconds: 60,
+    });
   });
 
   it("reports a lost lease when the result no longer applies", async () => {

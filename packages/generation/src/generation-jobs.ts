@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { GenerationJobStatus } from "./job-lifecycle.js";
+import type { ReportedGenerationJobStatus } from "./job-lifecycle.js";
 
 export type GenerationProvider = "mock";
 
@@ -7,7 +7,7 @@ export type GenerationJob = Readonly<{
   id: string;
   prompt: string;
   provider: GenerationProvider;
-  status: GenerationJobStatus;
+  status: ReportedGenerationJobStatus;
   createdAt: string;
 }>;
 

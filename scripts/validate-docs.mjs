@@ -26,6 +26,7 @@ const requiredFiles = [
   "docs/architecture/system.md",
   "docs/architecture/decisions/0001-use-fastify-and-swc.md",
   "docs/architecture/decisions/0002-use-postgresql-and-drizzle.md",
+  "docs/architecture/decisions/0003-authenticate-provider-callbacks.md",
   "docs/runbooks/local-development.md",
   "docs/plans/active-loop.md",
   "docs/plans/candidates/README.md",

@@ -1,6 +1,7 @@
-import type {
-  GenerationJob,
-  GenerationJobRepository,
+import {
+  type GenerationJob,
+  type GenerationJobRepository,
+  reportedStatus,
 } from "@afds-generation-platform/generation";
 import { eq } from "drizzle-orm";
 import type { DatabaseService } from "./database.service.js";
@@ -43,7 +44,7 @@ export class PostgresGenerationJobRepository
       id: row.id,
       prompt: row.prompt,
       provider: row.provider,
-      status: row.status,
+      status: reportedStatus(row.status),
       createdAt: row.createdAt.toISOString(),
     };
   }

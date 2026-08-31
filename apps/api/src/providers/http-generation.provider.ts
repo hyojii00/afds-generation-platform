@@ -1,8 +1,8 @@
 import {
   type GenerationProviderPort,
   PermanentProviderError,
+  type ProviderOutcome,
   type ProviderRequest,
-  type ProviderResult,
   TransientProviderError,
 } from "@afds-generation-platform/generation";
 
@@ -10,7 +10,13 @@ export type HttpProviderConfig = Readonly<{
   baseUrl: string;
   apiKey?: string;
   timeoutMs: number;
+  /** Where the provider reports work it accepted; absent means none. */
+  callbackBaseUrl?: string;
 }>;
+
+export function callbackPath(jobId: string, token: string): string {
+  return `/v1/provider-callbacks/${jobId}/${token}`;
+}
 
 type ProviderBody = { id?: unknown };
 
@@ -43,7 +49,7 @@ export class HttpGenerationProvider implements GenerationProviderPort {
     }
   }
 
-  async generate(request: ProviderRequest): Promise<ProviderResult> {
+  async generate(request: ProviderRequest): Promise<ProviderOutcome> {
     const response = await this.post(request);
 
     if (response.status === 429 || response.status >= 500) {
@@ -62,7 +68,20 @@ export class HttpGenerationProvider implements GenerationProviderPort {
       );
     }
 
-    return { reference: await this.reference(response) };
+    const reference = await this.reference(response);
+
+    if (response.status !== 202) {
+      return { status: "completed", reference };
+    }
+
+    if (!this.config.callbackBaseUrl) {
+      throw new PermanentProviderError(
+        "provider accepted the work but no callback URL is configured",
+        response.status,
+      );
+    }
+
+    return { status: "accepted", reference };
   }
 
   private async post(request: ProviderRequest): Promise<Response> {
@@ -82,12 +101,24 @@ export class HttpGenerationProvider implements GenerationProviderPort {
         body: JSON.stringify({
           prompt: request.prompt,
           provider: request.provider,
+          callbackUrl: this.callbackUrl(request),
         }),
         signal: AbortSignal.timeout(this.config.timeoutMs),
       });
     } catch (error) {
       throw this.transportFailure(error);
     }
+  }
+
+  private callbackUrl(request: ProviderRequest): string | undefined {
+    if (!this.config.callbackBaseUrl) {
+      return undefined;
+    }
+
+    return new URL(
+      callbackPath(request.jobId, request.callbackToken),
+      this.config.callbackBaseUrl,
+    ).toString();
   }
 
   /** A call that never completed is always worth another attempt. */

@@ -46,5 +46,6 @@ export function createGenerationProvider(
     baseUrl,
     apiKey: environment.PROVIDER_API_KEY,
     timeoutMs,
+    callbackBaseUrl: environment.PUBLIC_CALLBACK_BASE_URL?.trim() || undefined,
   });
 }
