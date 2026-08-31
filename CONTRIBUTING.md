@@ -2,7 +2,7 @@
 
 ## Setup
 
-Use Node.js 24.19.0, pnpm 11.22.0, and a running Docker engine.
+Use Node.js 24.20.0, pnpm 11.22.0, and a running Docker engine.
 
 ```bash
 corepack enable

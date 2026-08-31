@@ -1,8 +1,19 @@
 import { access, readFile } from "node:fs/promises";
 
 const candidateLoopFiles = [
-  "docs/plans/candidates/003-execute-jobs-reliably.md",
   "docs/plans/candidates/004-isolate-provider-integrations.md",
+];
+
+const completedLoopFiles = [
+  "docs/plans/completed/001-accept-and-retrieve-generation-jobs.md",
+  "docs/plans/completed/002-persist-generation-jobs.md",
+];
+
+const activeLoopStates = [
+  "implementing",
+  "ready_for_review",
+  "blocked",
+  "replan",
 ];
 
 const requiredFiles = [
@@ -16,8 +27,8 @@ const requiredFiles = [
   "docs/architecture/decisions/0002-use-postgresql-and-drizzle.md",
   "docs/runbooks/local-development.md",
   "docs/plans/active-loop.md",
-  "docs/plans/completed/001-accept-and-retrieve-generation-jobs.md",
   "docs/plans/candidates/README.md",
+  ...completedLoopFiles,
   ...candidateLoopFiles,
 ];
 
@@ -40,12 +51,32 @@ for (const heading of [
   }
 }
 
-if (!activeLoop.startsWith("# Active Loop 002")) {
-  throw new Error("Active loop must be Loop 002");
+if (!activeLoop.startsWith("# Active Loop 003")) {
+  throw new Error("Active loop must be Loop 003");
 }
 
-if (!activeLoop.includes("`ready_for_review`")) {
-  throw new Error("Active Loop 002 must be ready for review");
+const declaredState = activeLoop.match(/^## State\n\n`([^`\n]+)`$/m);
+if (!declaredState) {
+  throw new Error(
+    "Active loop must declare one backticked state under `## State`",
+  );
+}
+
+if (!activeLoopStates.includes(declaredState[1])) {
+  throw new Error(
+    `Active loop state must be one of ${activeLoopStates.join(", ")}; found ${declaredState[1]}`,
+  );
+}
+
+for (const path of completedLoopFiles) {
+  const completedLoop = await readFile(path, "utf8");
+  if (!completedLoop.startsWith("# Completed Loop ")) {
+    throw new Error(`Completed loop must stay archived: ${path}`);
+  }
+
+  if (!/^## State\n\n`completed`$/m.test(completedLoop)) {
+    throw new Error(`Completed loop must declare \`completed\`: ${path}`);
+  }
 }
 
 for (const path of candidateLoopFiles) {

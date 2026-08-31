@@ -12,7 +12,7 @@ The repository demonstrates two things together:
 
 ## Current capability
 
-The active loop accepts a job for the local mock provider, persists it in PostgreSQL, and retrieves it unchanged after the API process restarts.
+The implemented platform accepts a job for the local mock provider, persists it in PostgreSQL, and retrieves it unchanged after the API process restarts.
 
 ```http
 POST /v1/jobs
@@ -24,9 +24,9 @@ Content-Type: application/json
 }
 ```
 
-See `docs/plans/active-loop.md` for the exact scope, acceptance criteria, and verification evidence.
+See `docs/plans/completed/002-persist-generation-jobs.md` for the scope, acceptance criteria, and verification evidence behind that capability, and `docs/plans/active-loop.md` for the loop in progress.
 
-Loop 002 is active in `docs/plans/active-loop.md`; later possible outcomes remain non-active candidates in `docs/plans/candidates/README.md`.
+Loop 003 is active in `docs/plans/active-loop.md`; later possible outcomes remain non-active candidates in `docs/plans/candidates/README.md`.
 
 ## Repository shape
 

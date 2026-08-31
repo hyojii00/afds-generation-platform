@@ -1,8 +1,8 @@
 # Completed Loop 001 — Accept and Retrieve Generation Jobs
 
-## State at review
+## State
 
-`ready_for_review`
+`completed`
 
 ## Target
 

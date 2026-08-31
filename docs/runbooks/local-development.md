@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 24.19.0 and pnpm 11.22.0.
+- Node.js 24.20.0 and pnpm 11.22.0.
 - A running Docker engine.
 
 ## Start
