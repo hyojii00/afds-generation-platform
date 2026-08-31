@@ -13,9 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # setup-node v5 caches the pnpm store by default and resolves the
+      # package manager from the packageManager field, so pnpm has to exist
+      # before it runs.
+      - run: corepack enable
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
-      - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
