@@ -1,79 +1,81 @@
-# Active Loop 004 — Isolate Provider Integrations
+# Active Loop 005 — Deliver Provider Completion Events
 
 ## State
 
-`ready_for_review`
+`implementing`
 
 ## Target
 
-The worker executes generation through a provider-neutral port whose success, transient failure, permanent failure, and timeout behavior are proven against a local HTTP provider, without changing the public HTTP contract.
+A generation the provider accepts asynchronously reaches its terminal state through an authenticated completion notice, without a worker holding a lease for the provider's whole runtime, and without changing the public HTTP response fields or values.
 
 ## Allowed scope
 
-- Define a provider port, its request, its normalized result, and its error taxonomy in the generation package.
-- Add an HTTP provider adapter that sends the job identifier as an idempotency key, bounds every call with a timeout, and normalizes provider identifiers, results, and failures.
-- Select the in-process mock provider or the HTTP adapter from runtime configuration, and keep credentials in configuration.
-- Add a forward migration for the normalized provider reference on `generation_jobs`.
-- Add a local HTTP provider for tests with success, transient failure, permanent failure, timeout, and idempotency scenarios.
-- Add contract tests shared by the mock provider and the HTTP adapter, plus worker integration tests for retry classification.
-- Update architecture, configuration, and local-operation owners required by the provider boundary.
+- Add an `awaiting_provider` lifecycle state that releases the lease, and report it to clients as `processing`.
+- Extend the provider port so an implementation can answer "completed" or "accepted", and give the adapter a callback URL to hand the provider.
+- Issue one callback token per attempt, store only its hash, and bound the wait with a deadline.
+- Add an authenticated inbound completion route that applies a notice once.
+- Recover waits whose deadline passed as retryable failures inside the Loop 003 attempt budget.
+- Add a forward migration for the callback token hash, the wait deadline, and the expanded status constraint.
+- Extend the local provider with delayed completion, duplicate notice, unauthorized notice, and missing notice scenarios.
+- Update architecture, configuration, and local-operation owners required by the inbound boundary.
 
 ## Non-goals
 
-- Calls to real paid providers, committed credentials, media storage, or provider failover.
-- Webhooks, callbacks, polling orchestration, or any asynchronous completion notice; Loop 005 owns those.
-- Changing the Loop 003 lifecycle, lease, fencing, attempt limit, or backoff semantics.
-- Changing the `POST /v1/jobs` or `GET /v1/jobs/:id` request and response fields.
-- Multiple production adapters, provider-specific product features, billing, or rate-limit optimization.
+- Real paid providers, media storage, provider failover, or client-facing notifications.
+- Replacing the Loop 004 request/response path for providers that answer immediately.
+- Streaming progress, partial results, user cancellation, or provider-initiated retries.
+- Changing the `POST /v1/jobs` or `GET /v1/jobs/:id` request and response fields or their status values.
+- General inbound authentication, API keys for clients, or a webhook subscription model.
 
 ## Acceptance criteria
 
-1. The worker depends on the provider port; neither the worker nor the generation package imports the HTTP adapter, `fetch` wiring, or configuration.
-2. A shared contract test suite proves that the mock provider and the HTTP adapter both return a normalized reference for a successful generation and reject an unusable request as a permanent failure.
-3. The HTTP adapter classifies `429`, `5xx`, connection failure, and timeout as transient, and `4xx` other than `429` and an unusable success body as permanent.
-4. Only transient failures reach the Loop 003 retry path; a permanent failure ends the job on its first attempt, and the lifecycle, lease, fencing, and backoff behavior of Loop 003 is unchanged.
-5. Every provider call carries the job identifier as an idempotency key and is bounded by a timeout shorter than the lease, and the local provider proves a repeated key returns the first reference without doing the work twice.
-6. A successful job persists the normalized provider reference; `GET /v1/jobs/:id` still returns exactly its existing fields, and `400` and `404` behavior is unchanged.
-7. Normalized failures carry the provider status and reason without provider payloads, credentials, or request bodies, and no configured credential appears in an error or a log line.
-8. A forward migration adds the provider reference without losing existing jobs, and jobs created before it remain claimable and completable.
-9. Contract, adapter, worker integration, and existing tests, documentation validation, boundary checks, SWC builds, built-process smoke tests, and `pnpm verify` pass without network access or real credentials.
+1. A provider answer of "accepted" moves the job to `awaiting_provider`, persists the normalized reference, releases the lease and fencing token, and records a deadline; the attempt count does not change.
+2. `GET /v1/jobs/:id` reports an awaiting job as `processing` and still returns exactly its existing fields; `400` and `404` behavior is unchanged.
+3. A notice carrying the attempt's callback token moves an awaiting job to `succeeded` or `failed` exactly once, and the second identical notice changes nothing.
+4. A notice with an unknown job, a wrong token, a job that is not awaiting, or a deadline that already passed changes nothing and is answered without revealing which condition failed.
+5. Only the hash of a callback token is persisted, and no callback token appears in a job record, an error, or a log line.
+6. A wait whose deadline passed is recovered as a retryable failure: it returns to `queued` behind the Loop 003 backoff while attempts remain, and becomes `failed` on the last attempt.
+7. A reclaimed or requeued attempt issues a new callback token, so a notice for a previous attempt no longer applies.
+8. A forward migration adds the callback and deadline columns without losing existing jobs, and jobs created before it still execute to a terminal state.
+9. The local provider proves the full asynchronous round trip against the running API: submit, `202`, callback, terminal state.
+10. Contract, adapter, route, worker integration, and existing tests, documentation validation, boundary checks, SWC builds, built-process smoke tests, and `pnpm verify` pass without network access or real credentials.
 
 ## Decisions
 
-- Make the first provider contract request/response with a bounded timeout. An asynchronous completion notice would reopen the Loop 003 lease and lifecycle contract, so Loop 005 owns callbacks and their inbound authentication.
-- Send the job identifier as the idempotency key on every call and classify timeouts and `5xx` as transient. The key, not the absence of a retry, is what keeps a repeated attempt from duplicating paid work.
-- Persist the normalized provider reference on `generation_jobs` and keep it out of the HTTP response. Exposing it is a public-contract decision that no current requirement needs.
-- Keep `provider: "mock"` as the only accepted request value and choose the adapter from configuration, so the provider boundary can be proven without changing the public contract.
-- Keep provider payloads out of the domain: the port accepts a prompt and returns a reference, and failures carry a normalized status and reason.
-- Bound the provider call at 5 seconds by default, well inside the 30-second lease, so a slow provider cannot outlive its lease.
+- Keep `awaiting_provider` out of the public contract and report it as `processing`. The wait is a provider mechanic, and Loop 003's four reported values stay the platform's vocabulary.
+- Authenticate a notice with a per-attempt callback token rather than a shared secret or a signature. It needs no secret distribution, scopes a leak to one attempt, and gives the notice its authorization and its identity in one value.
+- Issue the callback token at claim time and store only its SHA-256 hash, so a database reader cannot forge a notice and a new attempt invalidates the previous token.
+- Treat a missed notice as a retryable failure inside the existing three-attempt budget, using the Loop 003 backoff. The idempotency key from Loop 004 keeps the resubmitted attempt from duplicating accepted work.
+- Answer every rejected notice the same way, so the route cannot be used to discover which jobs exist or which tokens are valid.
+- Recover expired waits in the worker's existing recovery pass rather than a separate process, so no new deployable unit appears.
 
 ## Decision gates
 
-- Stop in `replan` if the provider boundary requires changing the Loop 003 lifecycle, lease, or retry semantics.
-- Stop in `replan` if proving the contract requires a real provider, a network call, or a credential.
-- Stop in `replan` if normalized failures cannot be classified without inspecting provider payloads.
-- Do not add a second production adapter, a provider registry, callbacks, or a generalized transport abstraction.
+- Stop in `replan` if the waiting state cannot release the lease without weakening Loop 003's fencing or attempt guarantees.
+- Stop in `replan` if the notice cannot be applied exactly once without a lease.
+- Stop in `replan` if proving the round trip requires a public address, a real provider, or a credential.
+- Do not add a webhook subscription model, a signature scheme, a second inbound route, or a separate sweeper process.
 
 ## Pre-mortem
 
-- **Duplicate paid work:** a retry repeats a request the provider already accepted. Mitigate with the job identifier as an idempotency key and a local provider that proves a repeated key does the work once.
-- **Payload leakage:** provider bodies or credentials reach domain types, job records, or logs. Mitigate by normalizing at the adapter and asserting that error text carries neither.
-- **Silent misclassification:** a permanent failure is retried three times, or a transient failure ends the job. Mitigate with a status-by-status classification test.
-- **Timeout outliving the lease:** a slow provider holds a job past its lease and another worker reclaims it. Mitigate with a provider timeout well inside the lease and an explicit assertion on the configured bound.
-- **Contract drift:** the mock provider and the HTTP adapter diverge. Mitigate by running one contract suite against both.
+- **Notice applied twice:** a provider retries its callback. Mitigate by requiring the awaiting state and the current token hash in the same update, and by proving the second notice changes nothing.
+- **Notice for a stale attempt:** a late callback settles work another attempt already owns. Mitigate by issuing a token per claim and proving the previous token stops applying.
+- **Work waiting forever:** the notice is lost. Mitigate with a deadline, recovery into the attempt budget, and a test that ends the last attempt as `failed`.
+- **Token leakage:** the token reaches logs, job records, or errors. Mitigate by persisting only its hash and asserting its absence in records and messages.
+- **Enumeration through the route:** rejections reveal which jobs or tokens exist. Mitigate with one indistinguishable rejection for every failed condition.
 
 ## Evidence ledger
 
 | Check | Result |
 | --- | --- |
-| Shared provider contract suite | Passed — `pnpm test:integration` runs one suite against the mock provider and the HTTP adapter for a normalized reference, a repeated request, and a permanently rejected request |
-| HTTP failure classification and timeout | Passed — `pnpm test:integration` classifies `429`, `503`, a refused connection, a 500ms header timeout, and a body that stops mid-stream as transient, and an unparseable body and an identifier-less success as permanent |
-| Idempotency key and single execution | Passed — `pnpm test:integration` repeats a request and the local provider returns the first reference after doing the work once |
-| Worker retry classification through the port | Passed — `pnpm test:integration` drives the worker through the HTTP provider: a transient failure requeues at attempt 1, a permanent failure ends the job at attempt 1, and neither writes a reference |
-| Credential and payload containment | Passed — `pnpm test:integration` asserts the provider received the bearer credential while the normalized failure carries only `provider 503: provider is unavailable` |
-| Provider reference migration and persistence | Passed — `pnpm test:integration` migrates a Loop 002 database through `drizzle/0002_add_provider_reference.sql`, then claims, completes, and reads back the preserved job's reference |
-| Configuration refuses unusable values | Passed — `pnpm test:integration` fails startup for a base URL that is set but empty, is not a URL, or carries a timeout that outlives the lease, and keeps the path of a base URL that has one |
-| Unchanged HTTP contract and domain boundaries | Passed — `pnpm test:e2e` (5 tests) keeps the response fields, `400`, and `404`; `pnpm check:boundaries` also rejects `fetch`, `node:http`, and `process.env` inside the generation package |
-| SWC-built API and worker smoke tests | Passed — `pnpm test:smoke` and `pnpm test:smoke:worker` |
-| `pnpm verify` | Passed — formatting, lint, boundaries, 60 tests (20 unit, 35 integration, 5 E2E), docs, typecheck, SWC build, and both built-process smoke tests |
-| Diff critique | Passed — `git diff --check`; reviewed for scope, domain coupling, public-contract regression, and speculative abstractions |
+| Accepted answer releases the lease into a bounded wait | Pending |
+| Notice applied exactly once | Pending |
+| Rejected notices change nothing and stay indistinguishable | Pending |
+| Callback token hashing and per-attempt rotation | Pending |
+| Deadline recovery inside the attempt budget | Pending |
+| Asynchronous round trip against the running API | Pending |
+| Unchanged HTTP contract and domain boundaries | Pending |
+| Callback and deadline migration | Pending |
+| SWC-built API and worker smoke tests | Pending |
+| `pnpm verify` | Pending |
+| Diff critique | Pending |

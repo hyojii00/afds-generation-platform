@@ -26,7 +26,7 @@ Content-Type: application/json
 
 See `docs/plans/active-loop.md` for the exact scope, acceptance criteria, and verification evidence behind that capability.
 
-Loop 004 is active in `docs/plans/active-loop.md`; later possible outcomes remain non-active candidates in `docs/plans/candidates/README.md`.
+Loop 005 is active in `docs/plans/active-loop.md`; later possible outcomes remain non-active candidates in `docs/plans/candidates/README.md`.
 
 ## Repository shape
 

@@ -1,13 +1,13 @@
 import { access, readFile } from "node:fs/promises";
 
-const candidateLoopFiles = [
-  "docs/plans/candidates/005-deliver-provider-events.md",
-];
+/** No later loop is scheduled; a candidate is added when one is proposed. */
+const candidateLoopFiles = [];
 
 const completedLoopFiles = [
   "docs/plans/completed/001-accept-and-retrieve-generation-jobs.md",
   "docs/plans/completed/002-persist-generation-jobs.md",
   "docs/plans/completed/003-execute-jobs-reliably.md",
+  "docs/plans/completed/004-isolate-provider-integrations.md",
 ];
 
 const activeLoopStates = [
@@ -52,8 +52,8 @@ for (const heading of [
   }
 }
 
-if (!activeLoop.startsWith("# Active Loop 004")) {
-  throw new Error("Active loop must be Loop 004");
+if (!activeLoop.startsWith("# Active Loop 005")) {
+  throw new Error("Active loop must be Loop 005");
 }
 
 const declaredState = activeLoop.match(/^## State\n\n`([^`\n]+)`$/m);
