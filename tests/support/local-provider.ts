@@ -4,6 +4,8 @@ import { setTimeout as delay } from "node:timers/promises";
 
 export type LocalProvider = {
   url: string;
+  /** The path of the most recent request, to prove base-URL handling. */
+  receivedPath(): string | undefined;
   /** How many times the provider actually did the work for a key. */
   executions(idempotencyKey: string): number;
   receivedAuthorization(): string | undefined;
@@ -19,6 +21,7 @@ export async function startLocalProvider(): Promise<LocalProvider> {
   const references = new Map<string, string>();
   const executions = new Map<string, number>();
   let authorization: string | undefined;
+  let path: string | undefined;
 
   const server: Server = createServer((request, response) => {
     let body = "";
@@ -28,6 +31,7 @@ export async function startLocalProvider(): Promise<LocalProvider> {
 
     request.on("end", async () => {
       authorization = request.headers.authorization;
+      path = request.url;
       const key = String(request.headers["idempotency-key"] ?? "");
       const prompt = String(
         (JSON.parse(body || "{}") as { prompt?: unknown }).prompt ?? "",
@@ -37,6 +41,17 @@ export async function startLocalProvider(): Promise<LocalProvider> {
         response.writeHead(status, { "content-type": "application/json" });
         response.end(payload === undefined ? "" : JSON.stringify(payload));
       };
+
+      if (!request.url?.endsWith("/generations")) {
+        answer(404, { error: "unknown endpoint" });
+        return;
+      }
+
+      if (prompt.includes("stalled")) {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.write('{"id": "par');
+        return;
+      }
 
       if (prompt.includes("rate-limited")) {
         answer(429, { error: "slow down", secret: "provider-internal" });
@@ -98,10 +113,12 @@ export async function startLocalProvider(): Promise<LocalProvider> {
 
   return {
     url: `http://127.0.0.1:${address.port}`,
+    receivedPath: () => path,
     executions: (key) => executions.get(key) ?? 0,
     receivedAuthorization: () => authorization,
     close: () =>
       new Promise<void>((resolve, reject) => {
+        server.closeAllConnections();
         server.close((error) => (error ? reject(error) : resolve()));
       }),
   };

@@ -14,6 +14,11 @@ export type HttpProviderConfig = Readonly<{
 
 type ProviderBody = { id?: unknown };
 
+/** Releases the connection for a response whose body is never read. */
+async function discard(response: Response): Promise<void> {
+  await response.body?.cancel().catch(() => undefined);
+}
+
 /**
  * Normalizes one request/response provider. The job identifier travels as the
  * idempotency key, so a retried attempt cannot duplicate accepted work.
@@ -22,12 +27,27 @@ type ProviderBody = { id?: unknown };
  * bodies, and credentials never reach the error or the caller.
  */
 export class HttpGenerationProvider implements GenerationProviderPort {
-  constructor(private readonly config: HttpProviderConfig) {}
+  private readonly endpoint: URL;
+
+  constructor(private readonly config: HttpProviderConfig) {
+    const base = config.baseUrl.endsWith("/")
+      ? config.baseUrl
+      : `${config.baseUrl}/`;
+
+    try {
+      this.endpoint = new URL("generations", base);
+    } catch {
+      throw new Error(
+        `PROVIDER_BASE_URL is not a valid URL: ${config.baseUrl}`,
+      );
+    }
+  }
 
   async generate(request: ProviderRequest): Promise<ProviderResult> {
     const response = await this.post(request);
 
     if (response.status === 429 || response.status >= 500) {
+      await discard(response);
       throw new TransientProviderError(
         "provider is unavailable",
         response.status,
@@ -35,6 +55,7 @@ export class HttpGenerationProvider implements GenerationProviderPort {
     }
 
     if (!response.ok) {
+      await discard(response);
       throw new PermanentProviderError(
         "provider rejected the request",
         response.status,
@@ -55,7 +76,7 @@ export class HttpGenerationProvider implements GenerationProviderPort {
     }
 
     try {
-      return await fetch(new URL("/generations", this.config.baseUrl), {
+      return await fetch(this.endpoint, {
         method: "POST",
         headers,
         body: JSON.stringify({
@@ -65,12 +86,17 @@ export class HttpGenerationProvider implements GenerationProviderPort {
         signal: AbortSignal.timeout(this.config.timeoutMs),
       });
     } catch (error) {
-      throw new TransientProviderError(
-        error instanceof Error && error.name === "TimeoutError"
-          ? `provider did not answer within ${this.config.timeoutMs}ms`
-          : "provider is unreachable",
-      );
+      throw this.transportFailure(error);
     }
+  }
+
+  /** A call that never completed is always worth another attempt. */
+  private transportFailure(error: unknown): TransientProviderError {
+    return new TransientProviderError(
+      error instanceof Error && error.name === "TimeoutError"
+        ? `provider did not answer within ${this.config.timeoutMs}ms`
+        : "provider is unreachable",
+    );
   }
 
   private async reference(response: Response): Promise<string> {
@@ -78,11 +104,15 @@ export class HttpGenerationProvider implements GenerationProviderPort {
 
     try {
       body = (await response.json()) as ProviderBody;
-    } catch {
-      throw new PermanentProviderError(
-        "provider returned an unreadable body",
-        response.status,
-      );
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new PermanentProviderError(
+          "provider returned an unreadable body",
+          response.status,
+        );
+      }
+
+      throw this.transportFailure(error);
     }
 
     if (typeof body.id !== "string" || body.id.length === 0) {

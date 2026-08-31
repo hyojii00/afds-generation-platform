@@ -67,12 +67,13 @@ The worker executes generation through a provider-neutral port whose success, tr
 | Check | Result |
 | --- | --- |
 | Shared provider contract suite | Passed — `pnpm test:integration` runs one suite against the mock provider and the HTTP adapter for a normalized reference, a repeated request, and a permanently rejected request |
-| HTTP failure classification and timeout | Passed — `pnpm test:integration` classifies `429`, `503`, a refused connection, and a 500ms timeout as transient, and an unreadable body and an identifier-less success as permanent |
+| HTTP failure classification and timeout | Passed — `pnpm test:integration` classifies `429`, `503`, a refused connection, a 500ms header timeout, and a body that stops mid-stream as transient, and an unparseable body and an identifier-less success as permanent |
 | Idempotency key and single execution | Passed — `pnpm test:integration` repeats a request and the local provider returns the first reference after doing the work once |
 | Worker retry classification through the port | Passed — `pnpm test:integration` drives the worker through the HTTP provider: a transient failure requeues at attempt 1, a permanent failure ends the job at attempt 1, and neither writes a reference |
 | Credential and payload containment | Passed — `pnpm test:integration` asserts the provider received the bearer credential while the normalized failure carries only `provider 503: provider is unavailable` |
 | Provider reference migration and persistence | Passed — `pnpm test:integration` migrates a Loop 002 database through `drizzle/0002_add_provider_reference.sql`, then claims, completes, and reads back the preserved job's reference |
+| Configuration refuses unusable values | Passed — `pnpm test:integration` fails startup for a base URL that is set but empty, is not a URL, or carries a timeout that outlives the lease, and keeps the path of a base URL that has one |
 | Unchanged HTTP contract and domain boundaries | Passed — `pnpm test:e2e` (5 tests) keeps the response fields, `400`, and `404`; `pnpm check:boundaries` also rejects `fetch`, `node:http`, and `process.env` inside the generation package |
 | SWC-built API and worker smoke tests | Passed — `pnpm test:smoke` and `pnpm test:smoke:worker` |
-| `pnpm verify` | Passed — formatting, lint, boundaries, 56 tests (20 unit, 31 integration, 5 E2E), docs, typecheck, SWC build, and both built-process smoke tests |
+| `pnpm verify` | Passed — formatting, lint, boundaries, 60 tests (20 unit, 35 integration, 5 E2E), docs, typecheck, SWC build, and both built-process smoke tests |
 | Diff critique | Passed — `git diff --check`; reviewed for scope, domain coupling, public-contract regression, and speculative abstractions |

@@ -16,10 +16,18 @@ export function createGenerationProvider(
   environment: NodeJS.ProcessEnv = process.env,
   leaseSeconds?: number,
 ): GenerationProviderPort {
-  const baseUrl = environment.PROVIDER_BASE_URL;
+  const configuredBaseUrl = environment.PROVIDER_BASE_URL;
 
-  if (!baseUrl) {
+  if (configuredBaseUrl === undefined) {
     return mockGenerationProvider;
+  }
+
+  const baseUrl = configuredBaseUrl.trim();
+
+  if (baseUrl.length === 0) {
+    throw new Error(
+      "PROVIDER_BASE_URL is set but empty; unset it to run the mock provider",
+    );
   }
 
   const configured = Number(environment.PROVIDER_TIMEOUT_MS);

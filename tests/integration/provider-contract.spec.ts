@@ -84,6 +84,27 @@ describe("generation provider contract", () => {
       expect(failure.message).toContain("did not answer within 500ms");
     });
 
+    it("treats a body that stops mid-stream as transient", async () => {
+      const failure = await http
+        .generate(requestFor("stalled"))
+        .catch((e) => e);
+
+      expect(failure).toBeInstanceOf(TransientProviderError);
+      expect(failure.message).toContain("did not answer within 500ms");
+    });
+
+    it("keeps the path of a base URL that has one", async () => {
+      const prefixed = new HttpGenerationProvider({
+        baseUrl: `${local.url}/v1`,
+        timeoutMs: 500,
+      });
+
+      await expect(
+        prefixed.generate(requestFor("A prefixed cinematic sunrise")),
+      ).resolves.toMatchObject({ reference: expect.any(String) });
+      expect(local.receivedPath()).toBe("/v1/generations");
+    });
+
     it("treats an unreachable provider as transient", async () => {
       const unreachable = new HttpGenerationProvider({
         baseUrl: "http://127.0.0.1:1",
@@ -140,6 +161,18 @@ describe("generation provider contract", () => {
       expect(
         createGenerationProvider({ PROVIDER_BASE_URL: local.url }, 30),
       ).toBeInstanceOf(HttpGenerationProvider);
+    });
+
+    it("refuses a base URL that is set but empty", () => {
+      expect(() =>
+        createGenerationProvider({ PROVIDER_BASE_URL: "   " }, 30),
+      ).toThrow("set but empty");
+    });
+
+    it("refuses a base URL that is not a URL", () => {
+      expect(() =>
+        createGenerationProvider({ PROVIDER_BASE_URL: "api.example.com" }, 30),
+      ).toThrow("not a valid URL");
     });
 
     it("refuses a timeout that outlives the lease", () => {
