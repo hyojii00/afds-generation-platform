@@ -17,10 +17,16 @@ async function sourceFiles(directory) {
   return files.flat().filter((path) => path.endsWith(".ts"));
 }
 
+const forbiddenTransport = /\bfetch\s*\(|\bnode:https?\b|process\.env/;
+
 for (const path of await sourceFiles(sourceRoot)) {
   const source = await readFile(path, "utf8");
   if (forbiddenImport.test(source)) {
     throw new Error(`Generation boundary violation: ${path}`);
+  }
+
+  if (forbiddenTransport.test(source)) {
+    throw new Error(`Generation transport or configuration leak: ${path}`);
   }
 }
 
@@ -35,4 +41,6 @@ if (apiDependencies["@nestjs/platform-express"]) {
   throw new Error("API must not directly depend on @nestjs/platform-express");
 }
 
-console.log("Generation and Fastify adapter boundaries are intact.");
+console.log(
+  "Generation, transport, and Fastify adapter boundaries are intact.",
+);

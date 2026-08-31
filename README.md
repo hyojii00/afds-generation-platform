@@ -12,7 +12,7 @@ The repository demonstrates two things together:
 
 ## Current capability
 
-The implemented platform accepts a job for the local mock provider, persists it in PostgreSQL, executes it in an independent worker process, and reports the job's persisted lifecycle status.
+The implemented platform accepts a job for the local mock provider, persists it in PostgreSQL, executes it in an independent worker process through a provider-neutral port, and reports the job's persisted lifecycle status.
 
 ```http
 POST /v1/jobs
@@ -26,7 +26,7 @@ Content-Type: application/json
 
 See `docs/plans/active-loop.md` for the exact scope, acceptance criteria, and verification evidence behind that capability.
 
-Loop 003 is active in `docs/plans/active-loop.md`; later possible outcomes remain non-active candidates in `docs/plans/candidates/README.md`.
+Loop 004 is active in `docs/plans/active-loop.md`; later possible outcomes remain non-active candidates in `docs/plans/candidates/README.md`.
 
 ## Repository shape
 
@@ -37,7 +37,7 @@ Loop 003 is active in `docs/plans/active-loop.md`; later possible outcomes remai
 | `docs/architecture` | Current boundaries and explicit evolution gates |
 | `docs/plans` | The single active loop and its evidence ledger |
 | `packages/generation` | Framework-independent generation behavior |
-| `apps/api` | NestJS HTTP delivery, the worker entrypoint, and PostgreSQL adapters |
+| `apps/api` | NestJS HTTP delivery, the worker entrypoint, and PostgreSQL and provider adapters |
 | `drizzle` | Versioned PostgreSQL migrations |
 
 ## Development

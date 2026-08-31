@@ -2,6 +2,7 @@ import type {
   GenerationJobLease,
   GenerationJobQueue,
   GenerationJobStatus,
+  ProviderResult,
 } from "@afds-generation-platform/generation";
 import { sql } from "drizzle-orm";
 import type { DatabaseService } from "./database.service.js";
@@ -67,10 +68,15 @@ export class PostgresGenerationJobQueue implements GenerationJobQueue {
     };
   }
 
-  async succeed(lease: GenerationJobLease): Promise<boolean> {
+  async succeed(
+    lease: GenerationJobLease,
+    result: ProviderResult,
+  ): Promise<boolean> {
     return this.applyOwnedUpdate(
       lease,
-      sql`status = 'succeeded', failure_reason = null`,
+      sql`status = 'succeeded',
+          failure_reason = null,
+          provider_reference = ${result.reference}`,
     );
   }
 

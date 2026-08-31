@@ -1,19 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   defaultExecutionPolicy,
-  executeMockGeneration,
   InvalidGenerationJobTransitionError,
+  mockGenerationProvider,
   type GenerationJobLease,
   type GenerationJobQueue,
   GenerationJobWorker,
-  RetryableGenerationError,
+  type GenerationProviderPort,
+  PermanentProviderError,
   retryDelaySeconds,
+  TransientProviderError,
 } from "./index.js";
 
 type RecordedCall =
   | { kind: "recover"; maxAttempts: number }
   | { kind: "claim"; leaseSeconds: number; maxAttempts: number }
-  | { kind: "succeed" }
+  | { kind: "succeed"; reference: string }
   | { kind: "retry"; availableInSeconds: number; reason: string }
   | { kind: "fail"; reason: string };
 
@@ -30,8 +32,8 @@ class RecordingQueue implements GenerationJobQueue {
     return this.lease;
   }
 
-  async succeed() {
-    this.calls.push({ kind: "succeed" });
+  async succeed(_lease: GenerationJobLease, result: { reference: string }) {
+    this.calls.push({ kind: "succeed", reference: result.reference });
     return this.applied;
   }
 
@@ -52,6 +54,14 @@ class RecordingQueue implements GenerationJobQueue {
     this.calls.push({ kind: "recover", ...input });
     return { requeued: 0, failed: 0 };
   }
+}
+
+function failingProvider(error: Error): GenerationProviderPort {
+  return {
+    async generate() {
+      throw error;
+    },
+  };
 }
 
 function leaseFor(attempt: number): GenerationJobLease {
@@ -82,7 +92,7 @@ describe("GenerationJobWorker", () => {
     const queue = new RecordingQueue(undefined);
 
     await expect(
-      new GenerationJobWorker(queue, executeMockGeneration).runOnce(),
+      new GenerationJobWorker(queue, mockGenerationProvider).runOnce(),
     ).resolves.toBe("idle");
     expect(queue.calls).toEqual([
       { kind: "recover", maxAttempts: 3 },
@@ -94,9 +104,12 @@ describe("GenerationJobWorker", () => {
     const queue = new RecordingQueue(leaseFor(1));
 
     await expect(
-      new GenerationJobWorker(queue, executeMockGeneration).runOnce(),
+      new GenerationJobWorker(queue, mockGenerationProvider).runOnce(),
     ).resolves.toBe("succeeded");
-    expect(queue.calls.at(-1)).toEqual({ kind: "succeed" });
+    expect(queue.calls.at(-1)).toEqual({
+      kind: "succeed",
+      reference: "mock:6430a8ca-6c92-4cc3-81f9-4f6ee93db23f",
+    });
   });
 
   it.each([
@@ -106,9 +119,10 @@ describe("GenerationJobWorker", () => {
     "requeues retryable attempt %i after %i second(s)",
     async (attempt, backoff) => {
       const queue = new RecordingQueue(leaseFor(attempt));
-      const worker = new GenerationJobWorker(queue, async () => {
-        throw new RetryableGenerationError("provider is warming up");
-      });
+      const worker = new GenerationJobWorker(
+        queue,
+        failingProvider(new TransientProviderError("provider is warming up")),
+      );
 
       await expect(worker.runOnce()).resolves.toBe("retrying");
       expect(queue.calls.at(-1)).toEqual({
@@ -121,9 +135,10 @@ describe("GenerationJobWorker", () => {
 
   it("fails the third retryable attempt", async () => {
     const queue = new RecordingQueue(leaseFor(3));
-    const worker = new GenerationJobWorker(queue, async () => {
-      throw new RetryableGenerationError("provider is warming up");
-    });
+    const worker = new GenerationJobWorker(
+      queue,
+      failingProvider(new TransientProviderError("provider is warming up")),
+    );
 
     await expect(worker.runOnce()).resolves.toBe("failed");
     expect(queue.calls.at(-1)).toEqual({
@@ -134,9 +149,10 @@ describe("GenerationJobWorker", () => {
 
   it("fails a permanent failure on the first attempt", async () => {
     const queue = new RecordingQueue(leaseFor(1));
-    const worker = new GenerationJobWorker(queue, async () => {
-      throw new Error("prompt is rejected");
-    });
+    const worker = new GenerationJobWorker(
+      queue,
+      failingProvider(new PermanentProviderError("prompt is rejected")),
+    );
 
     await expect(worker.runOnce()).resolves.toBe("failed");
     expect(queue.calls.at(-1)).toEqual({
@@ -158,7 +174,7 @@ describe("GenerationJobWorker", () => {
     const queue = new RecordingQueue({ ...leaseFor(1), status: "queued" });
 
     await expect(
-      new GenerationJobWorker(queue, executeMockGeneration).runOnce(),
+      new GenerationJobWorker(queue, mockGenerationProvider).runOnce(),
     ).rejects.toBeInstanceOf(InvalidGenerationJobTransitionError);
     expect(queue.calls.some((call) => call.kind === "succeed")).toBe(false);
   });
@@ -167,7 +183,7 @@ describe("GenerationJobWorker", () => {
     const queue = new RecordingQueue(leaseFor(1), false);
 
     await expect(
-      new GenerationJobWorker(queue, executeMockGeneration).runOnce(),
+      new GenerationJobWorker(queue, mockGenerationProvider).runOnce(),
     ).resolves.toBe("lost");
   });
 });
