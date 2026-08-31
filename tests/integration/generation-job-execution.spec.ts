@@ -1,8 +1,9 @@
 import {
-  executeMockGeneration,
   type GenerationJobLease,
   GenerationJobWorker,
-  RetryableGenerationError,
+  mockGenerationProvider,
+  PermanentProviderError,
+  TransientProviderError,
 } from "@afds-generation-platform/generation";
 import type { StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { rm } from "node:fs/promises";
@@ -10,6 +11,11 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { DatabaseService } from "../../apps/api/src/database/database.service.js";
 import { PostgresGenerationJobQueue } from "../../apps/api/src/database/postgres-generation-job.queue.js";
+import { HttpGenerationProvider } from "../../apps/api/src/providers/http-generation.provider.js";
+import {
+  type LocalProvider,
+  startLocalProvider,
+} from "../support/local-provider.js";
 import {
   migrateDatabase,
   migrationsFolderUpTo,
@@ -60,6 +66,7 @@ describe("generation job execution in PostgreSQL", () => {
     const { rows } = await database.pool.query<{
       status: string;
       attempt_count: number;
+      provider_reference: string | null;
       fencing_token: string | null;
       lease_expires_at: Date | null;
       failure_reason: string | null;
@@ -123,9 +130,21 @@ describe("generation job execution in PostgreSQL", () => {
         }),
       ]);
 
+      const upgradedQueue = new PostgresGenerationJobQueue(upgraded);
+      const lease = await upgradedQueue.claim(policy);
+      expect(lease).toMatchObject({ jobId: id, attempt: 1 });
+      if (!lease) throw new Error("expected a lease");
+
       await expect(
-        new PostgresGenerationJobQueue(upgraded).claim(policy),
-      ).resolves.toMatchObject({ jobId: id, attempt: 1 });
+        upgradedQueue.succeed(lease, { reference: "mock:upgraded" }),
+      ).resolves.toBe(true);
+      const { rows: completed } = await pool.query(
+        "select status, provider_reference from generation_jobs where id = $1",
+        [id],
+      );
+      expect(completed).toEqual([
+        { status: "succeeded", provider_reference: "mock:upgraded" },
+      ]);
     } finally {
       await upgraded.close();
       await pool.end();
@@ -178,12 +197,17 @@ describe("generation job execution in PostgreSQL", () => {
     if (!lease) throw new Error("expected a lease");
 
     await expect(
-      queue.succeed({ ...lease, fencingToken: crypto.randomUUID() }),
+      queue.succeed(
+        { ...lease, fencingToken: crypto.randomUUID() },
+        { reference: "provider:foreign-token" },
+      ),
     ).resolves.toBe(false);
     expect(await readJob(id)).toMatchObject({ status: "processing" });
 
     await expireLease(id);
-    await expect(queue.succeed(lease)).resolves.toBe(false);
+    await expect(
+      queue.succeed(lease, { reference: "provider:expired" }),
+    ).resolves.toBe(false);
     expect(await readJob(id)).toMatchObject({ status: "processing" });
   });
 
@@ -198,7 +222,9 @@ describe("generation job execution in PostgreSQL", () => {
       fencingToken: crypto.randomUUID(),
     };
 
-    await expect(queue.succeed(queuedLease)).resolves.toBe(false);
+    const result = { reference: "provider:should-not-apply" };
+
+    await expect(queue.succeed(queuedLease, result)).resolves.toBe(false);
     await expect(queue.fail(queuedLease, { reason: "x" })).resolves.toBe(false);
     expect(await readJob(id)).toMatchObject({
       status: "queued",
@@ -208,8 +234,10 @@ describe("generation job execution in PostgreSQL", () => {
 
   it("requeues a retryable failure behind its backoff and fails the third attempt", async () => {
     const id = await insertQueuedJob();
-    const worker = new GenerationJobWorker(queue, async () => {
-      throw new RetryableGenerationError("provider is warming up");
+    const worker = new GenerationJobWorker(queue, {
+      async generate() {
+        throw new TransientProviderError("provider is warming up");
+      },
     });
 
     const beforeRetry = await transactionTime();
@@ -253,8 +281,10 @@ describe("generation job execution in PostgreSQL", () => {
 
   it("fails a permanent failure on the first attempt", async () => {
     const id = await insertQueuedJob();
-    const worker = new GenerationJobWorker(queue, async () => {
-      throw new Error("prompt is rejected");
+    const worker = new GenerationJobWorker(queue, {
+      async generate() {
+        throw new PermanentProviderError("prompt is rejected");
+      },
     });
 
     await expect(worker.runOnce()).resolves.toBe("failed");
@@ -297,6 +327,60 @@ describe("generation job execution in PostgreSQL", () => {
     });
   });
 
+  describe("through the HTTP provider", () => {
+    let local: LocalProvider;
+    let worker: GenerationJobWorker;
+
+    beforeAll(async () => {
+      local = await startLocalProvider();
+      worker = new GenerationJobWorker(
+        queue,
+        new HttpGenerationProvider({ baseUrl: local.url, timeoutMs: 500 }),
+      );
+    });
+
+    afterAll(async () => {
+      await local.close();
+    });
+
+    it("persists the normalized reference of a successful generation", async () => {
+      const id = await insertQueuedJob("A cinematic sunrise over Seoul");
+
+      await expect(worker.runOnce()).resolves.toBe("succeeded");
+
+      const job = await readJob(id);
+      expect(job.status).toBe("succeeded");
+      expect(job.provider_reference).toMatch(/^http:[0-9a-f]{16}$/);
+      expect(local.executions(id)).toBe(1);
+    });
+
+    it("retries a transient provider failure and ends a permanent one", async () => {
+      const transient = await insertQueuedJob(
+        "a prompt the provider finds unavailable",
+      );
+
+      await expect(worker.runOnce()).resolves.toBe("retrying");
+      expect(await readJob(transient)).toMatchObject({
+        status: "queued",
+        attempt_count: 1,
+        failure_reason: "provider 503: provider is unavailable",
+        provider_reference: null,
+      });
+
+      await database.pool.query("truncate table generation_jobs");
+      const permanent = await insertQueuedJob(
+        "a prompt the provider finds anonymous",
+      );
+
+      await expect(worker.runOnce()).resolves.toBe("failed");
+      expect(await readJob(permanent)).toMatchObject({
+        status: "failed",
+        attempt_count: 1,
+        provider_reference: null,
+      });
+    });
+  });
+
   it("resumes stale work after the worker is recreated without applying a result twice", async () => {
     const id = await insertQueuedJob();
     const abandoned = await queue.claim(policy);
@@ -307,7 +391,7 @@ describe("generation job execution in PostgreSQL", () => {
     try {
       const restartedWorker = new GenerationJobWorker(
         new PostgresGenerationJobQueue(restarted),
-        executeMockGeneration,
+        mockGenerationProvider,
       );
 
       await expect(restartedWorker.runOnce()).resolves.toBe("succeeded");
@@ -316,7 +400,9 @@ describe("generation job execution in PostgreSQL", () => {
         attempt_count: 2,
       });
 
-      await expect(queue.succeed(abandoned)).resolves.toBe(false);
+      await expect(
+        queue.succeed(abandoned, { reference: "provider:stale" }),
+      ).resolves.toBe(false);
       expect(await readJob(id)).toMatchObject({
         status: "succeeded",
         attempt_count: 2,

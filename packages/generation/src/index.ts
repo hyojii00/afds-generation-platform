@@ -9,7 +9,6 @@ export {
 } from "./generation-jobs.js";
 export type {
   ExecutionPolicy,
-  GenerationJobExecutor,
   GenerationJobLease,
   GenerationJobOutcome,
   GenerationJobQueue,
@@ -28,4 +27,13 @@ export {
   generationJobStatuses,
   InvalidGenerationJobTransitionError,
 } from "./job-lifecycle.js";
-export { executeMockGeneration } from "./mock-generation-executor.js";
+export type {
+  GenerationProviderPort,
+  ProviderRequest,
+  ProviderResult,
+} from "./generation-provider.js";
+export {
+  PermanentProviderError,
+  TransientProviderError,
+} from "./generation-provider.js";
+export { mockGenerationProvider } from "./mock-generation-provider.js";

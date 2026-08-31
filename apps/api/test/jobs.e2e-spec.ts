@@ -1,5 +1,5 @@
 import {
-  executeMockGeneration,
+  mockGenerationProvider,
   GenerationJobWorker,
 } from "@afds-generation-platform/generation";
 import { AppModule } from "../src/app.module.js";
@@ -105,7 +105,7 @@ describe("generation jobs API", () => {
     try {
       const worker = new GenerationJobWorker(
         new PostgresGenerationJobQueue(database),
-        executeMockGeneration,
+        mockGenerationProvider,
       );
       await expect(worker.runOnce()).resolves.toBe("succeeded");
     } finally {

@@ -1,4 +1,8 @@
 import type { GenerationProvider } from "./generation-jobs.js";
+import type {
+  GenerationProviderPort,
+  ProviderResult,
+} from "./generation-provider.js";
 import { assertTransition, type GenerationJobStatus } from "./job-lifecycle.js";
 
 export type GenerationJobLease = Readonly<{
@@ -44,17 +48,13 @@ export function retryDelaySeconds(
 /** A failure that another attempt may resolve, within the attempt limit. */
 export class RetryableGenerationError extends Error {}
 
-export type GenerationJobExecutor = (
-  lease: GenerationJobLease,
-) => Promise<void>;
-
 export interface GenerationJobQueue {
   claim(input: {
     leaseSeconds: number;
     maxAttempts: number;
   }): Promise<GenerationJobLease | undefined>;
   /** Each result method returns false when the lease no longer owns the job. */
-  succeed(lease: GenerationJobLease): Promise<boolean>;
+  succeed(lease: GenerationJobLease, result: ProviderResult): Promise<boolean>;
   retry(
     lease: GenerationJobLease,
     input: { availableInSeconds: number; reason: string },
@@ -75,7 +75,7 @@ export type GenerationJobOutcome =
 export class GenerationJobWorker {
   constructor(
     private readonly queue: GenerationJobQueue,
-    private readonly execute: GenerationJobExecutor,
+    private readonly provider: GenerationProviderPort,
     private readonly policy: ExecutionPolicy = defaultExecutionPolicy,
   ) {}
 
@@ -93,14 +93,20 @@ export class GenerationJobWorker {
       return "idle";
     }
 
+    let result: ProviderResult;
+
     try {
-      await this.execute(lease);
+      result = await this.provider.generate({
+        jobId: lease.jobId,
+        prompt: lease.prompt,
+        provider: lease.provider,
+      });
     } catch (error) {
       return await this.applyFailure(lease, error);
     }
 
     assertTransition(lease.status, "succeeded");
-    return (await this.queue.succeed(lease)) ? "succeeded" : "lost";
+    return (await this.queue.succeed(lease, result)) ? "succeeded" : "lost";
   }
 
   private async applyFailure(

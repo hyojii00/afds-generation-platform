@@ -1,10 +1,11 @@
 import {
-  executeMockGeneration,
+  defaultExecutionPolicy,
   GenerationJobWorker,
 } from "@afds-generation-platform/generation";
 import { setTimeout as delay } from "node:timers/promises";
 import { DatabaseService } from "./database/database.service.js";
 import { PostgresGenerationJobQueue } from "./database/postgres-generation-job.queue.js";
+import { createGenerationProvider } from "./providers/generation-provider.factory.js";
 
 const defaultIdleDelayMs = 200;
 
@@ -24,7 +25,7 @@ async function run(): Promise<void> {
 
   const worker = new GenerationJobWorker(
     new PostgresGenerationJobQueue(database),
-    executeMockGeneration,
+    createGenerationProvider(process.env, defaultExecutionPolicy.leaseSeconds),
   );
 
   let running = true;

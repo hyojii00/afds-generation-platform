@@ -35,6 +35,7 @@ export const generationJobsTable = pgTable(
     }),
     fencingToken: uuid("fencing_token"),
     failureReason: text("failure_reason"),
+    providerReference: text("provider_reference"),
   },
   (table) => [
     check("generation_jobs_provider_check", sql`${table.provider} = 'mock'`),
