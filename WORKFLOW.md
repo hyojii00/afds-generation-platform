@@ -5,7 +5,7 @@
 1. Define one externally observable target and explicit non-goals.
 2. Find the durable owner through `MAP.md`.
 3. Record testable acceptance criteria in `docs/plans/active-loop.md`.
-4. Set the loop to `implementing` and keep its pull request a draft until a terminal state is recorded.
+4. Activate the loop and implement it in one pull request; set the loop to `implementing` and keep the pull request a draft until a terminal state is recorded.
 5. Stop in `replan` when repository evidence conflicts with the loop contract.
 
 ## Execute
