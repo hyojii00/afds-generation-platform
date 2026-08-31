@@ -11,7 +11,7 @@
 | Current change scope and evidence | `docs/plans/active-loop.md` |
 | Candidate loop roadmap | `docs/plans/candidates/README.md` |
 | Generation job behavior | `packages/generation` |
-| HTTP delivery, worker process, and persistence adapters | `apps/api` |
+| HTTP delivery, worker process, persistence, and provider adapters | `apps/api` |
 | Versioned database migrations | `drizzle` |
 
 Task notes and raw prompts are temporary working material and are not repository truth.

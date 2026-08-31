@@ -2,7 +2,7 @@
 
 ## State
 
-`implementing`
+`ready_for_review`
 
 ## Target
 
@@ -66,13 +66,13 @@ The worker executes generation through a provider-neutral port whose success, tr
 
 | Check | Result |
 | --- | --- |
-| Shared provider contract suite | Pending |
-| HTTP failure classification and timeout | Pending |
-| Idempotency key and single execution | Pending |
-| Worker retry classification through the port | Pending |
-| Credential and payload containment | Pending |
-| Provider reference migration and persistence | Pending |
-| Unchanged HTTP contract and domain boundaries | Pending |
-| SWC-built API and worker smoke tests | Pending |
-| `pnpm verify` | Pending |
-| Diff critique | Pending |
+| Shared provider contract suite | Passed — `pnpm test:integration` runs one suite against the mock provider and the HTTP adapter for a normalized reference, a repeated request, and a permanently rejected request |
+| HTTP failure classification and timeout | Passed — `pnpm test:integration` classifies `429`, `503`, a refused connection, and a 500ms timeout as transient, and an unreadable body and an identifier-less success as permanent |
+| Idempotency key and single execution | Passed — `pnpm test:integration` repeats a request and the local provider returns the first reference after doing the work once |
+| Worker retry classification through the port | Passed — `pnpm test:integration` drives the worker through the HTTP provider: a transient failure requeues at attempt 1, a permanent failure ends the job at attempt 1, and neither writes a reference |
+| Credential and payload containment | Passed — `pnpm test:integration` asserts the provider received the bearer credential while the normalized failure carries only `provider 503: provider is unavailable` |
+| Provider reference migration and persistence | Passed — `pnpm test:integration` migrates a Loop 002 database through `drizzle/0002_add_provider_reference.sql`, then claims, completes, and reads back the preserved job's reference |
+| Unchanged HTTP contract and domain boundaries | Passed — `pnpm test:e2e` (5 tests) keeps the response fields, `400`, and `404`; `pnpm check:boundaries` also rejects `fetch`, `node:http`, and `process.env` inside the generation package |
+| SWC-built API and worker smoke tests | Passed — `pnpm test:smoke` and `pnpm test:smoke:worker` |
+| `pnpm verify` | Passed — formatting, lint, boundaries, 56 tests (20 unit, 31 integration, 5 E2E), docs, typecheck, SWC build, and both built-process smoke tests |
+| Diff critique | Passed — `git diff --check`; reviewed for scope, domain coupling, public-contract regression, and speculative abstractions |

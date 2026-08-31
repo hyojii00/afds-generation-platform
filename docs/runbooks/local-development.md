@@ -27,11 +27,13 @@ pnpm start:worker
 
 The worker is a separate process that shares only PostgreSQL with the API. It claims one queued job at a time, recovers leases that expired, and stops on `SIGINT` or `SIGTERM` after the job in flight settles. A database error that escapes the loop is logged and exits the process with status 1 rather than retrying silently, so run it under a supervisor that restarts it; the lease its job holds expires and another worker reclaims the work. It polls every 200 milliseconds while the queue is empty; set `WORKER_IDLE_DELAY_MS` to change that. Running several workers is safe: row leasing gives each job one owner.
 
+By default the worker runs the in-process mock provider and needs no configuration. Set `PROVIDER_BASE_URL` to call an HTTP provider instead, with `PROVIDER_API_KEY` for its credential and `PROVIDER_TIMEOUT_MS` for its call bound (5 seconds by default, and it must stay under the 30-second lease or the worker refuses to start). Credentials live in `.env`, never in the repository, and never reach job records or logs.
+
 Jobs move `queued` → `processing` → `succeeded` or `failed`. A retryable failure returns the job to `queued` behind a 1-second and then a 2-second backoff, and the third attempt is terminal. Inspect a stuck job directly:
 
 ```bash
 docker compose exec postgres psql -U afds -d afds_generation_platform \
-  -c "select id, status, attempt_count, available_at, lease_expires_at, failure_reason from generation_jobs order by created_at desc limit 10;"
+  -c "select id, status, attempt_count, available_at, lease_expires_at, failure_reason, provider_reference from generation_jobs order by created_at desc limit 10;"
 ```
 
 ## Verify
