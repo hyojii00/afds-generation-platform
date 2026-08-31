@@ -2,7 +2,7 @@
 
 ## State
 
-`implementing`
+`ready_for_review`
 
 ## Target
 
@@ -45,7 +45,7 @@ A persisted queued job is claimed by an independently runnable worker and reache
 - Assign a UUID fencing token and a 30-second lease on each claim. Completion or failure updates require `processing`, the current token, and an unexpired lease.
 - Use PostgreSQL transaction time for availability, lease expiry, and fencing comparisons so worker clock skew cannot change ownership decisions.
 - Increment the attempt count when claiming. Allow three total attempts, with retryable failures available after 1 second and then 2 seconds; the third retryable failure and every permanent failure are terminal.
-- Reclaim expired `processing` rows below three attempts with a new fencing token so late updates from the prior owner are rejected. Mark an expired third attempt `failed` during recovery.
+- Reclaim expired `processing` rows below three attempts by clearing the fencing token and requeueing them; the next claim assigns a new token, so late updates from the prior owner are rejected. Mark an expired third attempt `failed` during recovery.
 - Keep the local executor deterministic and side-effect-free. Loop 004 owns real provider contracts and their external idempotency strategy.
 - Keep existing HTTP routes and fields. Expanding `status` from only `queued` to the four documented lifecycle values is the observable result of this loop.
 
@@ -68,13 +68,13 @@ A persisted queued job is claimed by an independently runnable worker and reache
 
 | Check | Result |
 | --- | --- |
-| Migration from the Loop 002 schema | Pending |
-| Atomic job creation and claimability | Pending |
-| Concurrent claim and fencing tests | Pending |
-| Retry, permanent failure, and stale recovery tests | Pending |
-| Worker restart and persisted terminal state | Pending |
-| Invalid lifecycle transition rejection | Pending |
-| Existing HTTP contract and domain boundaries | Pending |
-| SWC-built API and worker smoke tests | Pending |
-| `pnpm verify` | Pending |
-| Diff critique | Pending |
+| Migration from the Loop 002 schema | Passed — `pnpm test:integration` migrates a database to `0000`, inserts a job, applies `drizzle/0001_add_job_execution_metadata.sql`, and claims the preserved row with zero prior attempts |
+| Atomic job creation and claimability | Passed — `pnpm test:e2e` asserts the `201` response fields and a single `queued`, zero-attempt, immediately available row |
+| Concurrent claim and fencing tests | Passed — `pnpm test:integration` races two independent connections for one job and rejects results carrying a foreign token, an expired lease, or a non-`processing` row |
+| Retry, permanent failure, and stale recovery tests | Passed — `pnpm test:integration` proves 1-second and 2-second backoffs, a terminal third attempt, first-attempt permanent failure, stale requeue, and an expired final attempt becoming `failed` |
+| Worker restart and persisted terminal state | Passed — `pnpm test:integration` recreates the worker against the same database, succeeds the recovered job, and rejects the abandoned lease's late result |
+| Invalid lifecycle transition rejection | Passed — `pnpm test:unit` rejects all 12 transitions outside the lifecycle, and `pnpm test:integration` proves none of them reach PostgreSQL |
+| Existing HTTP contract and domain boundaries | Passed — `pnpm test:e2e` (5 tests) keeps `201`, `400`, `404`, and the response fields; `pnpm check:boundaries` keeps NestJS, Drizzle, `pg`, and the worker entrypoint out of the generation package |
+| SWC-built API and worker smoke tests | Passed — `pnpm test:smoke` and `pnpm test:smoke:worker` run the built API and the built worker as separate processes against a container database |
+| `pnpm verify` | Passed — formatting, lint, boundaries, 35 tests (18 unit, 12 integration, 5 E2E), docs, typecheck, SWC build, and both built-process smoke tests |
+| Diff critique | Passed — `git diff --check`; reviewed for scope, domain coupling, public-contract regression, and speculative abstractions |
