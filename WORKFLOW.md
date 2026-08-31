@@ -5,7 +5,8 @@
 1. Define one externally observable target and explicit non-goals.
 2. Find the durable owner through `MAP.md`.
 3. Record testable acceptance criteria in `docs/plans/active-loop.md`.
-4. Stop in `replan` when repository evidence conflicts with the loop contract.
+4. Set the loop to `implementing` and keep its pull request a draft until a terminal state is recorded.
+5. Stop in `replan` when repository evidence conflicts with the loop contract.
 
 ## Execute
 
@@ -19,4 +20,4 @@
 1. Run `pnpm verify`.
 2. Review the complete diff for unrelated edits and speculative abstractions.
 3. Set the loop to `ready_for_review`, `blocked`, or `replan`.
-4. Open one pull request for the loop; do not start the next loop implicitly.
+4. Mark the loop's single pull request ready for review; do not start the next loop implicitly.

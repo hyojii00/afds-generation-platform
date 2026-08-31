@@ -13,8 +13,16 @@ This repository demonstrates an AI-first development system in which repository-
 5. **Human decision gates.** Scope changes, public contracts, persistent data, external services, and security boundaries require explicit review.
 6. **No proprietary material.** Company source code, schemas, prompts, customer data, credentials, and internal identifiers are excluded.
 
+## Loop states
+
+- `implementing`: the loop contract is agreed and its evidence ledger is not yet satisfied.
+
 ## Terminal states
 
 - `ready_for_review`: acceptance criteria and verification pass; a pull request may be opened.
 - `blocked`: an external dependency prevents completion and is documented.
 - `replan`: repository evidence invalidates the agreed loop contract.
+
+## Archive state
+
+- `completed`: the loop reached `ready_for_review`, its pull request merged, and its plan moved to `docs/plans/completed/`.

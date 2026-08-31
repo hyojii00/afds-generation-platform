@@ -24,7 +24,7 @@ Content-Type: application/json
 }
 ```
 
-See `docs/plans/active-loop.md` for the exact scope, acceptance criteria, and verification evidence.
+See `docs/plans/completed/002-persist-generation-jobs.md` for the scope, acceptance criteria, and verification evidence behind that capability, and `docs/plans/active-loop.md` for the loop in progress.
 
 Loop 003 is active in `docs/plans/active-loop.md`; later possible outcomes remain non-active candidates in `docs/plans/candidates/README.md`.
 

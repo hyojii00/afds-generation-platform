@@ -35,7 +35,8 @@ A persisted queued job is claimed by an independently runnable worker and reache
 5. Retryable failures requeue after bounded 1-second and 2-second backoffs, then become `failed` on the third failed attempt; permanent failures become `failed` on the first attempt.
 6. Recreating the worker against the same database resumes queued or stale work without applying a successful result twice.
 7. `GET /v1/jobs/:id` retains its fields and reports the persisted lifecycle status; `400` and `404` behavior remains unchanged.
-8. The generation package remains free of NestJS, Drizzle, and worker entrypoint imports, and all focused tests, documentation validation, SWC builds, built-process smoke tests, and `pnpm verify` pass.
+8. Only `queued` → `processing`, `processing` → `succeeded`, `processing` → `failed`, and `processing` → `queued` on a bounded retry are accepted; every other transition is rejected in the domain and never persisted.
+9. The generation package remains free of NestJS, Drizzle, and worker entrypoint imports, and all focused tests, documentation validation, SWC builds, built-process smoke tests, and `pnpm verify` pass.
 
 ## Decisions
 
@@ -72,6 +73,7 @@ A persisted queued job is claimed by an independently runnable worker and reache
 | Concurrent claim and fencing tests | Pending |
 | Retry, permanent failure, and stale recovery tests | Pending |
 | Worker restart and persisted terminal state | Pending |
+| Invalid lifecycle transition rejection | Pending |
 | Existing HTTP contract and domain boundaries | Pending |
 | SWC-built API and worker smoke tests | Pending |
 | `pnpm verify` | Pending |
