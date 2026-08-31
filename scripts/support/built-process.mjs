@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 
 /** Starts a built entrypoint and collects its output for failure messages. */
@@ -8,8 +7,16 @@ export function startBuiltProcess(entrypoint, env) {
     env: { ...process.env, ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
-  const exited = once(child, "exit");
   let output = "";
+  let spawnError;
+  const exited = new Promise((resolve) => {
+    child.once("exit", resolve);
+    child.once("error", (error) => {
+      spawnError = error;
+      output += `${error.stack ?? error.message}\n`;
+      resolve(null);
+    });
+  });
 
   child.stdout.on("data", (chunk) => {
     output += chunk;
@@ -26,9 +33,17 @@ export function startBuiltProcess(entrypoint, env) {
       return output;
     },
     running() {
-      return child.exitCode === null && child.signalCode === null;
+      return (
+        spawnError === undefined &&
+        child.exitCode === null &&
+        child.signalCode === null
+      );
     },
     async stop() {
+      if (spawnError) {
+        throw spawnError;
+      }
+
       if (!this.running()) {
         return child.exitCode;
       }

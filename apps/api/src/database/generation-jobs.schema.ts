@@ -45,5 +45,8 @@ export const generationJobsTable = pgTable(
     index("generation_jobs_claimable_idx")
       .on(table.availableAt)
       .where(sql`${table.status} = 'queued'`),
+    index("generation_jobs_expired_lease_idx")
+      .on(table.leaseExpiresAt)
+      .where(sql`${table.status} = 'processing'`),
   ],
 );

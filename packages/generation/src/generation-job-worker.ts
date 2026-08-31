@@ -1,10 +1,12 @@
 import type { GenerationProvider } from "./generation-jobs.js";
-import { assertTransition } from "./job-lifecycle.js";
+import { assertTransition, type GenerationJobStatus } from "./job-lifecycle.js";
 
 export type GenerationJobLease = Readonly<{
   jobId: string;
   prompt: string;
   provider: GenerationProvider;
+  /** The status the claim persisted, as the database returned it. */
+  status: GenerationJobStatus;
   attempt: number;
   fencingToken: string;
 }>;
@@ -23,7 +25,9 @@ export const defaultExecutionPolicy: ExecutionPolicy = {
 
 /**
  * Seconds to wait before the failed attempt becomes claimable again, or
- * undefined when the attempt limit leaves no retry.
+ * undefined when the attempt limit leaves no retry. Attempts beyond the
+ * configured backoffs reuse the last one, so a shorter list never turns a
+ * retryable failure into a terminal one.
  */
 export function retryDelaySeconds(
   policy: ExecutionPolicy,
@@ -33,7 +37,8 @@ export function retryDelaySeconds(
     return undefined;
   }
 
-  return policy.retryBackoffSeconds[failedAttempt - 1];
+  const backoffs = policy.retryBackoffSeconds;
+  return backoffs[Math.min(failedAttempt, backoffs.length) - 1];
 }
 
 /** A failure that another attempt may resolve, within the attempt limit. */
@@ -94,7 +99,7 @@ export class GenerationJobWorker {
       return await this.applyFailure(lease, error);
     }
 
-    assertTransition("processing", "succeeded");
+    assertTransition(lease.status, "succeeded");
     return (await this.queue.succeed(lease)) ? "succeeded" : "lost";
   }
 
@@ -109,11 +114,11 @@ export class GenerationJobWorker {
         : undefined;
 
     if (availableInSeconds === undefined) {
-      assertTransition("processing", "failed");
+      assertTransition(lease.status, "failed");
       return (await this.queue.fail(lease, { reason })) ? "failed" : "lost";
     }
 
-    assertTransition("processing", "queued");
+    assertTransition(lease.status, "queued");
     return (await this.queue.retry(lease, { availableInSeconds, reason }))
       ? "retrying"
       : "lost";

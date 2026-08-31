@@ -6,7 +6,17 @@ import { setTimeout as delay } from "node:timers/promises";
 import { DatabaseService } from "./database/database.service.js";
 import { PostgresGenerationJobQueue } from "./database/postgres-generation-job.queue.js";
 
-const idleDelayMs = Number(process.env.WORKER_IDLE_DELAY_MS ?? 200);
+const defaultIdleDelayMs = 200;
+
+function idleDelayMs(): number {
+  const configured = Number(process.env.WORKER_IDLE_DELAY_MS);
+
+  if (!Number.isFinite(configured) || configured <= 0) {
+    return defaultIdleDelayMs;
+  }
+
+  return configured;
+}
 
 async function run(): Promise<void> {
   const database = new DatabaseService(process.env.DATABASE_URL ?? "");
@@ -31,7 +41,7 @@ async function run(): Promise<void> {
       const outcome = await worker.runOnce();
 
       if (outcome === "idle") {
-        await delay(idleDelayMs);
+        await delay(idleDelayMs());
         continue;
       }
 

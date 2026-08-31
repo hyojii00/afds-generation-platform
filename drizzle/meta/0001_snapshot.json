@@ -1,5 +1,5 @@
 {
-  "id": "1d2f12af-d61c-41d7-875a-7ca086c50053",
+  "id": "23b60864-0d97-4ea2-84fc-c2c1bc5a88af",
   "prevId": "f35c15e7-2c72-41d7-854a-2f018c486be9",
   "version": "7",
   "dialect": "postgresql",
@@ -84,6 +84,22 @@
           ],
           "isUnique": false,
           "where": "\"generation_jobs\".\"status\" = 'queued'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "generation_jobs_expired_lease_idx": {
+          "name": "generation_jobs_expired_lease_idx",
+          "columns": [
+            {
+              "expression": "lease_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"generation_jobs\".\"status\" = 'processing'",
           "concurrently": false,
           "method": "btree",
           "with": {}

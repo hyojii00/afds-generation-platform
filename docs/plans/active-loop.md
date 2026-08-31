@@ -73,8 +73,8 @@ A persisted queued job is claimed by an independently runnable worker and reache
 | Concurrent claim and fencing tests | Passed — `pnpm test:integration` races two independent connections for one job and rejects results carrying a foreign token, an expired lease, or a non-`processing` row |
 | Retry, permanent failure, and stale recovery tests | Passed — `pnpm test:integration` proves 1-second and 2-second backoffs, a terminal third attempt, first-attempt permanent failure, stale requeue, and an expired final attempt becoming `failed` |
 | Worker restart and persisted terminal state | Passed — `pnpm test:integration` recreates the worker against the same database, succeeds the recovered job, and rejects the abandoned lease's late result |
-| Invalid lifecycle transition rejection | Passed — `pnpm test:unit` rejects all 12 transitions outside the lifecycle, and `pnpm test:integration` proves none of them reach PostgreSQL |
+| Invalid lifecycle transition rejection | Passed — `pnpm test:unit` rejects all 12 transitions outside the lifecycle and refuses to settle a lease whose persisted status is not `processing`, and `pnpm test:integration` proves none of them reach PostgreSQL |
 | Existing HTTP contract and domain boundaries | Passed — `pnpm test:e2e` (5 tests) keeps `201`, `400`, `404`, and the response fields; `pnpm check:boundaries` keeps NestJS, Drizzle, `pg`, and the worker entrypoint out of the generation package |
 | SWC-built API and worker smoke tests | Passed — `pnpm test:smoke` and `pnpm test:smoke:worker` run the built API and the built worker as separate processes against a container database |
-| `pnpm verify` | Passed — formatting, lint, boundaries, 35 tests (18 unit, 12 integration, 5 E2E), docs, typecheck, SWC build, and both built-process smoke tests |
+| `pnpm verify` | Passed — formatting, lint, boundaries, 37 tests (20 unit, 12 integration, 5 E2E), docs, typecheck, SWC build, and both built-process smoke tests |
 | Diff critique | Passed — `git diff --check`; reviewed for scope, domain coupling, public-contract regression, and speculative abstractions |

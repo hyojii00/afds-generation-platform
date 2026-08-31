@@ -1,6 +1,7 @@
 import type {
   GenerationJobLease,
   GenerationJobQueue,
+  GenerationJobStatus,
 } from "@afds-generation-platform/generation";
 import { sql } from "drizzle-orm";
 import type { DatabaseService } from "./database.service.js";
@@ -9,6 +10,7 @@ type ClaimedRow = {
   id: string;
   prompt: string;
   provider: "mock";
+  status: GenerationJobStatus;
   attempt_count: number;
   fencing_token: string;
 };
@@ -46,7 +48,7 @@ export class PostgresGenerationJobQueue implements GenerationJobQueue {
              failure_reason = null
         from claimable
        where job.id = claimable.id
-      returning job.id, job.prompt, job.provider, job.attempt_count, job.fencing_token
+      returning job.id, job.prompt, job.provider, job.status, job.attempt_count, job.fencing_token
     `);
 
     const row = claimed.rows[0];
@@ -59,6 +61,7 @@ export class PostgresGenerationJobQueue implements GenerationJobQueue {
       jobId: row.id,
       prompt: row.prompt,
       provider: row.provider,
+      status: row.status,
       attempt: row.attempt_count,
       fencingToken: row.fencing_token,
     };

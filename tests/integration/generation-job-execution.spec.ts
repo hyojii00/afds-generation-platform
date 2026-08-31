@@ -5,6 +5,7 @@ import {
   RetryableGenerationError,
 } from "@afds-generation-platform/generation";
 import type { StartedPostgreSqlContainer } from "@testcontainers/postgresql";
+import { rm } from "node:fs/promises";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { DatabaseService } from "../../apps/api/src/database/database.service.js";
@@ -65,7 +66,22 @@ describe("generation job execution in PostgreSQL", () => {
       available_at: Date;
     }>("select * from generation_jobs where id = $1", [id]);
 
-    return rows[0];
+    const [row] = rows;
+    if (!row) {
+      throw new Error(`expected generation job ${id}`);
+    }
+
+    return row;
+  }
+
+  async function transactionTime() {
+    const { rows } = await database.pool.query<{ now: Date }>("select now()");
+    const [row] = rows;
+    if (!row) {
+      throw new Error("expected a transaction timestamp");
+    }
+
+    return row.now;
   }
 
   async function expireLease(id: string) {
@@ -80,7 +96,8 @@ describe("generation job execution in PostgreSQL", () => {
     const upgradeUrl = new URL(container.getConnectionUri());
     upgradeUrl.pathname = "/loop_002_upgrade";
     const connectionString = upgradeUrl.toString();
-    await migrateDatabase(connectionString, await migrationsFolderUpTo(1));
+    const migrationsWindow = await migrationsFolderUpTo(1);
+    await migrateDatabase(connectionString, migrationsWindow);
 
     const pool = new Pool({ connectionString });
     const upgraded = new DatabaseService(connectionString);
@@ -112,6 +129,8 @@ describe("generation job execution in PostgreSQL", () => {
     } finally {
       await upgraded.close();
       await pool.end();
+      await rm(migrationsWindow, { recursive: true, force: true });
+      await database.pool.query("drop database loop_002_upgrade");
     }
   });
 
@@ -174,6 +193,7 @@ describe("generation job execution in PostgreSQL", () => {
       jobId: id,
       prompt: "A cinematic sunrise over Seoul",
       provider: "mock",
+      status: "processing",
       attempt: 1,
       fencingToken: crypto.randomUUID(),
     };
@@ -192,23 +212,32 @@ describe("generation job execution in PostgreSQL", () => {
       throw new RetryableGenerationError("provider is warming up");
     });
 
+    const beforeRetry = await transactionTime();
     await expect(worker.runOnce()).resolves.toBe("retrying");
-    expect(await readJob(id)).toMatchObject({
+    await expect(queue.claim(policy)).resolves.toBeUndefined();
+
+    const requeued = await readJob(id);
+    expect(requeued).toMatchObject({
       status: "queued",
       attempt_count: 1,
       failure_reason: "provider is warming up",
     });
-    await expect(queue.claim(policy)).resolves.toBeUndefined();
+    expect(
+      requeued.available_at.getTime() - beforeRetry.getTime(),
+    ).toBeGreaterThanOrEqual(1_000);
 
     await database.pool.query(
       "update generation_jobs set available_at = now() where id = $1",
       [id],
     );
+    const beforeSecondRetry = await transactionTime();
     await expect(worker.runOnce()).resolves.toBe("retrying");
-    expect(await readJob(id)).toMatchObject({
-      status: "queued",
-      attempt_count: 2,
-    });
+
+    const requeuedAgain = await readJob(id);
+    expect(requeuedAgain).toMatchObject({ status: "queued", attempt_count: 2 });
+    expect(
+      requeuedAgain.available_at.getTime() - beforeSecondRetry.getTime(),
+    ).toBeGreaterThanOrEqual(2_000);
 
     await database.pool.query(
       "update generation_jobs set available_at = now() where id = $1",

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   defaultExecutionPolicy,
   executeMockGeneration,
+  InvalidGenerationJobTransitionError,
   type GenerationJobLease,
   type GenerationJobQueue,
   GenerationJobWorker,
@@ -58,6 +59,7 @@ function leaseFor(attempt: number): GenerationJobLease {
     jobId: "6430a8ca-6c92-4cc3-81f9-4f6ee93db23f",
     prompt: "A cinematic sunrise over Seoul",
     provider: "mock",
+    status: "processing",
     attempt,
     fencingToken: "0c2a1f16-3d0c-4a5e-9f16-6a29f1d1b0f5",
   };
@@ -141,6 +143,24 @@ describe("GenerationJobWorker", () => {
       kind: "fail",
       reason: "prompt is rejected",
     });
+  });
+
+  it("reuses the last backoff when the policy configures fewer than it allows", () => {
+    expect(
+      retryDelaySeconds(
+        { maxAttempts: 5, retryBackoffSeconds: [1, 2], leaseSeconds: 30 },
+        3,
+      ),
+    ).toBe(2);
+  });
+
+  it("refuses to settle a lease that is not processing", async () => {
+    const queue = new RecordingQueue({ ...leaseFor(1), status: "queued" });
+
+    await expect(
+      new GenerationJobWorker(queue, executeMockGeneration).runOnce(),
+    ).rejects.toBeInstanceOf(InvalidGenerationJobTransitionError);
+    expect(queue.calls.some((call) => call.kind === "succeed")).toBe(false);
   });
 
   it("reports a lost lease when the result no longer applies", async () => {

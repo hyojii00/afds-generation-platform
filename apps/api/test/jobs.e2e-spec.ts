@@ -80,6 +80,15 @@ describe("generation jobs API", () => {
 
   it("accepts a job as claimable work and reports its lifecycle status", async () => {
     const app = await createApp();
+
+    try {
+      await expectLifecycleStatus(app);
+    } finally {
+      await app.close();
+    }
+  });
+
+  async function expectLifecycleStatus(app: NestFastifyApplication) {
     const created = await request(app.getHttpServer())
       .post("/v1/jobs")
       .send({ prompt: "A cinematic sunrise over Seoul", provider: "mock" })
@@ -108,8 +117,7 @@ describe("generation jobs API", () => {
       .expect(200);
 
     expect(retrieved.body).toEqual({ ...created.body, status: "succeeded" });
-    await app.close();
-  });
+  }
 
   it("rejects invalid creation input", async () => {
     const app = await createApp();
