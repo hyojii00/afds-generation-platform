@@ -74,7 +74,7 @@ pnpm verify
 pnpm dev:api
 ```
 
-The API listens on `http://localhost:3000` by default; set `PORT` to override it. Use `pnpm build && pnpm start:api` to run the SWC-compiled output, and `pnpm start:worker` to run the worker process beside it. The API requires `DATABASE_URL` and an applied migration and fails startup instead of falling back to memory. `pnpm verify` uses isolated PostgreSQL containers, so Docker must be available. See `docs/runbooks/local-development.md` for operations and cleanup.
+The API listens on `http://localhost:3000` by default; set `PORT` to override it, and `GET /health` reports whether it can serve requests. Use `pnpm build && pnpm start:api` to run the SWC-compiled output, and `pnpm start:worker` to run the worker process beside it. The API requires `DATABASE_URL` and an applied migration and fails startup instead of falling back to memory. `pnpm verify` uses isolated PostgreSQL containers, so Docker must be available. See `docs/runbooks/local-development.md` for operations and cleanup.
 
 ## Portfolio safety
 

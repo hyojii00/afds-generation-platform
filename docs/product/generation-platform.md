@@ -15,7 +15,7 @@ A client can create a job for the local mock provider and retrieve it by identif
 
 ## Planned evolution
 
-Later loops may add authentication, observability, and a signaling state machine. Each capability requires its own active loop and pull request.
+The runtime reports its own health and writes structured job outcomes. Later loops may add authentication, metrics and tracing, and a signaling state machine. Each capability requires its own active loop and pull request.
 
 ## Non-goals
 

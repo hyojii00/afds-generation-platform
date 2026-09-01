@@ -36,6 +36,18 @@ docker compose exec postgres psql -U afds -d afds_generation_platform \
   -c "select id, status, attempt_count, available_at, lease_expires_at, failure_reason, provider_reference from generation_jobs order by created_at desc limit 10;"
 ```
 
+## Check the runtime
+
+```bash
+curl -s http://localhost:3000/health
+```
+
+`{"status":"ok"}` means the API reached its migrated schema; `503 {"status":"unavailable"}` means it did not, and the reason is in the API log rather than the response. Both processes write structured JSON lines; set `LOG_LEVEL` (for example `debug`, `warn`, or `silent`) to change or silence them. Follow one job with its identifier:
+
+```bash
+pnpm start:worker | grep generation_job.settled
+```
+
 ## Verify
 
 ```bash

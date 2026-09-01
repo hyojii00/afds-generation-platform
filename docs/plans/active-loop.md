@@ -2,7 +2,7 @@
 
 ## State
 
-`implementing`
+`ready_for_review`
 
 ## Target
 
@@ -14,6 +14,7 @@ An operator can ask the running API whether it is able to serve requests, and ca
 - Enable the Fastify runtime's structured request logging behind a configurable level.
 - Add an observer port the worker notifies when a job settles, and a JSON log adapter that writes it.
 - Replace the worker's unstructured console output with that adapter.
+- Make database shutdown idempotent, so an unusable database can be exercised without a second close throwing.
 - Add health, logging, and worker-observer tests.
 - Update architecture, configuration, and local-operation owners required by the new route and log format.
 
@@ -62,12 +63,12 @@ An operator can ask the running API whether it is able to serve requests, and ca
 
 | Check | Result |
 | --- | --- |
-| Healthy and unhealthy health responses | Pending |
-| Health route isolation from the product API | Pending |
-| Worker observer notifications | Pending |
-| Log line shape and secret containment | Pending |
-| Configurable log level | Pending |
-| Unchanged HTTP contract and domain boundaries | Pending |
-| SWC-built API and worker smoke tests | Pending |
-| `pnpm verify` | Pending |
-| Diff critique | Pending |
+| Healthy and unhealthy health responses | Passed — `pnpm test:e2e` returns `200 {"status":"ok"}` against a migrated database and `503 {"status":"unavailable"}` after the pool closes, with neither the connection string nor a driver message in the body |
+| Health route isolation from the product API | Passed — `pnpm test:e2e` keeps `POST /v1/jobs`, `GET /v1/jobs/:id`, and `404` behavior unchanged, and `/v1/health` stays absent |
+| Worker observer notifications | Passed — `pnpm test:unit` reports one settled event per job with its identifier, attempt, and outcome, and none for an idle poll |
+| Log line shape and secret containment | Passed — `pnpm test:integration` asserts the exact JSON keys for an event, an error event, and a settled job, so only named fields are written |
+| Configurable log level | Passed — `pnpm test:integration` silences the adapter at `LOG_LEVEL=silent`; both smoke scripts run the built processes at that level |
+| Unchanged HTTP contract and domain boundaries | Passed — `pnpm test:e2e` (13 tests) and `pnpm check:boundaries`; the observer stays a port in the generation package with its adapter in `apps/api` |
+| SWC-built API and worker smoke tests | Passed — `pnpm test:smoke` also asserts the built API's health answer, and `pnpm test:smoke:worker` asserts the built worker's `generation_job.settled` line for the job it finished |
+| `pnpm verify` | Passed — formatting, lint, boundaries, 92 tests (27 unit, 52 integration, 13 E2E), docs, typecheck, SWC build, and both built-process smoke tests |
+| Diff critique | Passed — `git diff --check`; reviewed for scope, domain coupling, public-contract regression, and speculative abstractions |
