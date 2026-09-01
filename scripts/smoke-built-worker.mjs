@@ -53,6 +53,7 @@ try {
 
     const worker = startBuiltProcess("apps/api/dist/worker.main.js", {
       DATABASE_URL: databaseUrl,
+      LOG_LEVEL: "info",
     });
     const settled = () =>
       worker.output

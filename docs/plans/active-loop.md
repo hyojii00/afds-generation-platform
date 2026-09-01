@@ -32,8 +32,8 @@ An operator can ask the running API whether it is able to serve requests, and ca
 2. `GET /health` returns `503` with exactly `{"status":"unavailable"}` when the database is unreachable, and the response carries no connection string, driver message, or stack.
 3. The health route needs no authentication, is outside `/v1`, and leaves the existing routes and their responses unchanged.
 4. The worker notifies its observer once for every settled job with the job identifier, the attempt, and the outcome, and never for an idle poll.
-5. The log adapter writes one JSON line per event carrying a timestamp, a level, an event name, and the job fields, and never a prompt, a callback token, a credential, or a provider payload.
-6. The API emits one structured line per request, and `LOG_LEVEL` sets or silences the level for both processes.
+5. The log adapter writes one JSON line per event carrying a timestamp, a level, an event name, and the job fields, and never a prompt, a callback token, a credential, or a provider payload; request logging redacts the callback token from the path it records.
+6. The API emits one structured line per request, and `LOG_LEVEL` sets or silences the level for both processes, falling back to `info` for an empty or unknown value rather than failing to start.
 7. The generation package still imports no NestJS, transport, or configuration code, and the observer stays a port with an adapter outside it.
 8. Health, logging, worker, and existing tests, documentation validation, boundary checks, SWC builds, built-process smoke tests, and `pnpm verify` pass.
 
@@ -58,6 +58,7 @@ An operator can ask the running API whether it is able to serve requests, and ca
 - **Leaked internals:** the failure body or a log line carries a connection string or a token. Mitigate by asserting the exact bodies and the exact log fields.
 - **Noisy logs drowning the outcome:** request logging buries job events. Mitigate with one line per settled job and a configurable level.
 - **Domain coupling:** the worker reaches for a logger. Mitigate with the observer port and the boundary check.
+- **Secret in a request path:** the callback token authenticates through the URL, so request logging would record it. Mitigate with a serializer that redacts the token segment and a test that asserts the recorded path.
 
 ## Evidence ledger
 
@@ -66,9 +67,9 @@ An operator can ask the running API whether it is able to serve requests, and ca
 | Healthy and unhealthy health responses | Passed — `pnpm test:e2e` returns `200 {"status":"ok"}` against a migrated database and `503 {"status":"unavailable"}` after the pool closes, with neither the connection string nor a driver message in the body |
 | Health route isolation from the product API | Passed — `pnpm test:e2e` keeps `POST /v1/jobs`, `GET /v1/jobs/:id`, and `404` behavior unchanged, and `/v1/health` stays absent |
 | Worker observer notifications | Passed — `pnpm test:unit` reports one settled event per job with its identifier, attempt, and outcome, and none for an idle poll |
-| Log line shape and secret containment | Passed — `pnpm test:integration` asserts the exact JSON keys for an event, an error event, and a settled job, so only named fields are written |
-| Configurable log level | Passed — `pnpm test:integration` silences the adapter at `LOG_LEVEL=silent`; both smoke scripts run the built processes at that level |
+| Log line shape and secret containment | Passed — `pnpm test:integration` asserts the exact JSON keys for an event, an error event, and a settled job, and proves the request serializer records a callback path as `/v1/provider-callbacks/<id>/[redacted]` while leaving other paths intact |
+| Configurable log level | Passed — `pnpm test:integration` resolves empty, unknown, and differently cased values to `info`, drops an info event at `warn`, and silences the adapter at `silent` |
 | Unchanged HTTP contract and domain boundaries | Passed — `pnpm test:e2e` (13 tests) and `pnpm check:boundaries`; the observer stays a port in the generation package with its adapter in `apps/api` |
 | SWC-built API and worker smoke tests | Passed — `pnpm test:smoke` also asserts the built API's health answer, and `pnpm test:smoke:worker` asserts the built worker's `generation_job.settled` line for the job it finished |
-| `pnpm verify` | Passed — formatting, lint, boundaries, 92 tests (27 unit, 52 integration, 13 E2E), docs, typecheck, SWC build, and both built-process smoke tests |
+| `pnpm verify` | Passed — formatting, lint, boundaries, 102 tests (27 unit, 62 integration, 13 E2E), docs, typecheck, SWC build, and both built-process smoke tests |
 | Diff critique | Passed — `git diff --check`; reviewed for scope, domain coupling, public-contract regression, and speculative abstractions |

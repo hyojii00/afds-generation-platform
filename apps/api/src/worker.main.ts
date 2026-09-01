@@ -46,15 +46,17 @@ async function run(): Promise<void> {
         await delay(idleDelayMs());
       }
     }
+
+    logEvent("info", "worker.stopped");
   } finally {
     await database.close();
-    logEvent("info", "worker.stopped");
   }
 }
 
 run().catch((error: unknown) => {
   logEvent("error", "worker.failed", {
     reason: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? (error.stack ?? "") : "",
   });
   process.exitCode = 1;
 });

@@ -6,7 +6,7 @@ import { generationJobsTable } from "./generation-jobs.schema.js";
 export class DatabaseService {
   readonly pool: Pool;
   readonly db: NodePgDatabase<typeof schema>;
-  private closed = false;
+  private closing: Promise<void> | undefined;
 
   constructor(connectionString: string) {
     if (!connectionString) {
@@ -21,13 +21,13 @@ export class DatabaseService {
     await this.db.select().from(generationJobsTable).limit(0);
   }
 
-  /** Idempotent: shutdown may run after the pool has already been closed. */
+  /**
+   * Idempotent: shutdown may run after the pool has already been closed.
+   * Every caller awaits the same close, so a failed one is never reported as
+   * a success.
+   */
   async close(): Promise<void> {
-    if (this.closed) {
-      return;
-    }
-
-    this.closed = true;
-    await this.pool.end();
+    this.closing ??= this.pool.end();
+    await this.closing;
   }
 }

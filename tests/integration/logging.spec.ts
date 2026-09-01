@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { jobLogObserver, logEvent } from "../../apps/api/src/logging.js";
+import {
+  jobLogObserver,
+  logEvent,
+  redactCallbackToken,
+  requestLoggerOptions,
+  resolveLogLevel,
+} from "../../apps/api/src/logging.js";
+import { callbackPath } from "../../apps/api/src/providers/http-generation.provider.js";
 
 function captureLines(level: "log" | "error") {
   const lines: string[] = [];
@@ -66,6 +73,52 @@ describe("structured logging", () => {
       attempt: 1,
       outcome: "succeeded",
     });
+  });
+
+  it("keeps a callback token out of a request log line", () => {
+    const jobId = "6430a8ca-6c92-4cc3-81f9-4f6ee93db23f";
+    const token = "0c2a1f16-3d0c-4a5e-9f16-6a29f1d1b0f5";
+    const url = `/${callbackPath(jobId, token)}`;
+
+    const redacted = redactCallbackToken(url);
+
+    expect(redacted).toBe(`/v1/provider-callbacks/${jobId}/[redacted]`);
+    expect(redacted).not.toContain(token);
+    expect(
+      requestLoggerOptions({}).serializers.req({ method: "POST", url }),
+    ).toEqual({
+      method: "POST",
+      url: `/v1/provider-callbacks/${jobId}/[redacted]`,
+    });
+  });
+
+  it("leaves other request paths intact", () => {
+    expect(redactCallbackToken("/v1/jobs/abc")).toBe("/v1/jobs/abc");
+    expect(redactCallbackToken("/health")).toBe("/health");
+  });
+
+  it.each([
+    [undefined, "info"],
+    ["", "info"],
+    ["  ", "info"],
+    ["INFO", "info"],
+    ["warning", "info"],
+    ["WARN", "warn"],
+    ["silent", "silent"],
+  ])("resolves the level %s to %s", (configured, expected) => {
+    expect(resolveLogLevel(configured)).toBe(expected);
+    expect(requestLoggerOptions({ LOG_LEVEL: configured }).level).toBe(
+      expected,
+    );
+  });
+
+  it("drops an event below the configured level", () => {
+    process.env.LOG_LEVEL = "warn";
+    const { lines } = captureLines("log");
+
+    logEvent("info", "generation_job.settled", { jobId: "abc" });
+
+    expect(lines).toEqual([]);
   });
 
   it("stays silent at the silent level", () => {
