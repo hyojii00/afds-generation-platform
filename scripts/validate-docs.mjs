@@ -8,6 +8,7 @@ const completedLoopFiles = [
   "docs/plans/completed/002-persist-generation-jobs.md",
   "docs/plans/completed/003-execute-jobs-reliably.md",
   "docs/plans/completed/004-isolate-provider-integrations.md",
+  "docs/plans/completed/005-deliver-provider-events.md",
 ];
 
 const activeLoopStates = [
@@ -53,8 +54,8 @@ for (const heading of [
   }
 }
 
-if (!activeLoop.startsWith("# Active Loop 005")) {
-  throw new Error("Active loop must be Loop 005");
+if (!activeLoop.startsWith("# Active Loop 006")) {
+  throw new Error("Active loop must be Loop 006");
 }
 
 const declaredState = activeLoop.match(/^## State\n\n`([^`\n]+)`$/m);

@@ -1,81 +1,73 @@
-# Active Loop 005 — Deliver Provider Completion Events
+# Active Loop 006 — Report Runtime Health and Job Outcomes
 
 ## State
 
-`ready_for_review`
+`implementing`
 
 ## Target
 
-A generation the provider accepts asynchronously reaches its terminal state through an authenticated completion notice, without a worker holding a lease for the provider's whole runtime, and without changing the public HTTP response fields or values.
+An operator can ask the running API whether it is able to serve requests, and can read one structured line per HTTP request and per settled job that identifies the job without exposing prompts, credentials, or callback tokens.
 
 ## Allowed scope
 
-- Add an `awaiting_provider` lifecycle state that releases the lease, and report it to clients as `processing`.
-- Extend the provider port so an implementation can answer "completed" or "accepted", and give the adapter a callback URL to hand the provider.
-- Issue one callback token per attempt, store only its hash, and bound the wait with a deadline.
-- Add an authenticated inbound completion route that applies a notice once.
-- Recover waits whose deadline passed as retryable failures inside the Loop 003 attempt budget.
-- Add a forward migration for the callback token hash, the wait deadline, and the expanded status constraint.
-- Extend the local provider with delayed completion, duplicate notice, unauthorized notice, and missing notice scenarios.
-- Update architecture, configuration, and local-operation owners required by the inbound boundary.
+- Add a `GET /health` route that reports whether the API can reach its migrated schema.
+- Enable the Fastify runtime's structured request logging behind a configurable level.
+- Add an observer port the worker notifies when a job settles, and a JSON log adapter that writes it.
+- Replace the worker's unstructured console output with that adapter.
+- Add health, logging, and worker-observer tests.
+- Update architecture, configuration, and local-operation owners required by the new route and log format.
 
 ## Non-goals
 
-- Real paid providers, media storage, provider failover, or client-facing notifications.
-- Replacing the Loop 004 request/response path for providers that answer immediately.
-- Streaming progress, partial results, user cancellation, or provider-initiated retries.
-- Changing the `POST /v1/jobs` or `GET /v1/jobs/:id` request and response fields or their status values.
-- General inbound authentication, API keys for clients, or a webhook subscription model.
+- Metrics, tracing, dashboards, alerting, log shipping, or a metrics endpoint.
+- Authentication or rate limiting for the health route.
+- Liveness and readiness as separate routes, dependency-by-dependency health detail, or a health route for the worker process.
+- Changing the `POST /v1/jobs`, `GET /v1/jobs/:id`, or provider callback contracts.
+- Changing the lifecycle, lease, attempt, or provider semantics of Loops 003 through 005.
 
 ## Acceptance criteria
 
-1. A provider answer of "accepted" moves the job to `awaiting_provider`, persists the normalized reference, releases the lease and fencing token, and records a deadline; the attempt count does not change.
-2. `GET /v1/jobs/:id` reports an awaiting job as `processing` and still returns exactly its existing fields; `400` and `404` behavior is unchanged.
-3. A notice carrying the attempt's callback token moves an awaiting job to `succeeded` or `failed` exactly once, and the second identical notice changes nothing.
-4. A notice with an unknown job, a wrong token, a job that is not awaiting, or a deadline that already passed changes nothing and is answered without revealing which condition failed.
-5. Only the hash of a callback token is persisted, and no callback token appears in a job record, an error, or a log line.
-6. A wait whose deadline passed is recovered as a retryable failure: it returns to `queued` behind the Loop 003 backoff while attempts remain, and becomes `failed` on the last attempt.
-7. A reclaimed or requeued attempt issues a new callback token, so a notice for a previous attempt no longer applies.
-8. A forward migration adds the callback and deadline columns without losing existing jobs, and jobs created before it still execute to a terminal state.
-9. The local provider proves the full asynchronous round trip against the running API: submit, `202`, callback, terminal state.
-10. Contract, adapter, route, worker integration, and existing tests, documentation validation, boundary checks, SWC builds, built-process smoke tests, and `pnpm verify` pass without network access or real credentials.
+1. `GET /health` returns `200` with exactly `{"status":"ok"}` while the API can query its migrated schema.
+2. `GET /health` returns `503` with exactly `{"status":"unavailable"}` when the database is unreachable, and the response carries no connection string, driver message, or stack.
+3. The health route needs no authentication, is outside `/v1`, and leaves the existing routes and their responses unchanged.
+4. The worker notifies its observer once for every settled job with the job identifier, the attempt, and the outcome, and never for an idle poll.
+5. The log adapter writes one JSON line per event carrying a timestamp, a level, an event name, and the job fields, and never a prompt, a callback token, a credential, or a provider payload.
+6. The API emits one structured line per request, and `LOG_LEVEL` sets or silences the level for both processes.
+7. The generation package still imports no NestJS, transport, or configuration code, and the observer stays a port with an adapter outside it.
+8. Health, logging, worker, and existing tests, documentation validation, boundary checks, SWC builds, built-process smoke tests, and `pnpm verify` pass.
 
 ## Decisions
 
-- Keep `awaiting_provider` out of the public contract and report it as `processing`. The wait is a provider mechanic, and Loop 003's four reported values stay the platform's vocabulary.
-- Authenticate a notice with a per-attempt callback token rather than a shared secret or a signature. It needs no secret distribution, scopes a leak to one attempt, and gives the notice its authorization and its identity in one value.
-- Issue the callback token at claim time and store only its SHA-256 hash, so a database reader cannot forge a notice and a new attempt invalidates the previous token.
-- Treat a missed notice as a retryable failure inside the existing three-attempt budget, using the Loop 003 backoff. The idempotency key from Loop 004 keeps the resubmitted attempt from duplicating accepted work.
-- Answer every rejected notice the same way, so the route cannot be used to discover which jobs exist or which tokens are valid.
-- Recover expired waits in the worker's existing recovery pass rather than a separate process, so no new deployable unit appears.
+- Serve one health route rather than separate liveness and readiness routes. A single deployable answer keeps the contract small; splitting it is a decision for whoever deploys this.
+- Make the check the same query startup uses, so `200` means "this process can serve `GET /v1/jobs/:id`" rather than "the process is alive".
+- Put the route at `/health`, outside `/v1`, because it reports on the runtime rather than on the product API, and version it only if its body ever changes.
+- Answer an unhealthy check with a fixed body. An operator reads the status; the driver's message belongs in the log, not in an unauthenticated response.
+- Give the domain an observer port instead of a logger. The worker owns what happened; formatting and transport stay in the adapter, and the port keeps the generation package free of both.
+- Use the Fastify runtime's own request logging rather than an interceptor, so one library owns the API's log format.
 
 ## Decision gates
 
-- Stop in `replan` if the waiting state cannot release the lease without weakening Loop 003's fencing or attempt guarantees.
-- Stop in `replan` if the notice cannot be applied exactly once without a lease.
-- Stop in `replan` if proving the round trip requires a public address, a real provider, or a credential.
-- Do not add a webhook subscription model, a signature scheme, a second inbound route, or a separate sweeper process.
+- Stop in `replan` if the health check cannot distinguish an unusable database without leaking its message.
+- Stop in `replan` if structured logging requires the generation package to import a logger or configuration.
+- Do not add metrics, tracing, a second health route, or a log-shipping dependency.
 
 ## Pre-mortem
 
-- **Notice applied twice:** a provider retries its callback. Mitigate by requiring the awaiting state and the current token hash in the same update, and by proving the second notice changes nothing.
-- **Notice for a stale attempt:** a late callback settles work another attempt already owns. Mitigate by issuing a token per claim and proving the previous token stops applying.
-- **Work waiting forever:** the notice is lost. Mitigate with a deadline, recovery into the attempt budget, and a test that ends the last attempt as `failed`.
-- **Token leakage:** the token reaches logs, job records, or errors. Mitigate by persisting only its hash and asserting its absence in records and messages.
-- **Enumeration through the route:** rejections reveal which jobs or tokens exist. Mitigate with one indistinguishable rejection for every failed condition.
+- **Health that always answers `200`:** the route checks the process, not the database. Mitigate by closing the pool in a test and asserting `503`.
+- **Leaked internals:** the failure body or a log line carries a connection string or a token. Mitigate by asserting the exact bodies and the exact log fields.
+- **Noisy logs drowning the outcome:** request logging buries job events. Mitigate with one line per settled job and a configurable level.
+- **Domain coupling:** the worker reaches for a logger. Mitigate with the observer port and the boundary check.
 
 ## Evidence ledger
 
 | Check | Result |
 | --- | --- |
-| Accepted answer releases the lease into a bounded wait | Passed — `pnpm test:integration` parks the job in `awaiting_provider` with its reference and deadline, clears the lease and fencing token, keeps the attempt at 1, and leaves nothing claimable |
-| Notice applied exactly once | Passed — `pnpm test:integration` settles an awaiting job with the attempt's token, applies a notice that arrives before the job is parked, and proves the second, contradicting delivery changes nothing |
-| Rejected notices change nothing and stay indistinguishable | Passed — `pnpm test:integration` rejects a wrong token, an unknown identifier, a malformed identifier, a job that is not awaiting, and an expired deadline; `pnpm test:e2e` answers `404` for every unauthorized or unknown notice |
-| Callback token hashing and per-attempt rotation | Passed — `pnpm test:integration` finds only the SHA-256 hash in the row and proves a reclaimed attempt's new token applies while the previous one no longer does |
-| Deadline recovery inside the attempt budget | Passed — `pnpm test:integration` requeues a missed notice behind the 1-second backoff with its reason and fails the last attempt |
-| Asynchronous round trip against the running API | Passed — `pnpm test:e2e` submits through the HTTP adapter to a local provider that answers `202` and calls back into the listening API, ending `succeeded` for a success notice and `failed` for a failure notice |
-| Unchanged HTTP contract and domain boundaries | Passed — `pnpm test:e2e` (10 tests) reports an awaiting job as `processing` with exactly its existing fields and keeps `400` and `404`; `pnpm check:boundaries` keeps transport, configuration, and adapters out of the generation package |
-| Callback and deadline migration | Passed — `pnpm test:integration` migrates a Loop 002 database through `drizzle/0003_add_provider_callbacks.sql` and executes the preserved job to a terminal state |
-| SWC-built API and worker smoke tests | Passed — `pnpm test:smoke` and `pnpm test:smoke:worker` |
-| `pnpm verify` | Passed — formatting, lint, boundaries, 84 tests (26 unit, 48 integration, 10 E2E), docs, typecheck, SWC build, and both built-process smoke tests |
-| Diff critique | Passed — `git diff --check`; reviewed for scope, domain coupling, public-contract regression, and speculative abstractions |
+| Healthy and unhealthy health responses | Pending |
+| Health route isolation from the product API | Pending |
+| Worker observer notifications | Pending |
+| Log line shape and secret containment | Pending |
+| Configurable log level | Pending |
+| Unchanged HTTP contract and domain boundaries | Pending |
+| SWC-built API and worker smoke tests | Pending |
+| `pnpm verify` | Pending |
+| Diff critique | Pending |

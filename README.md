@@ -48,7 +48,7 @@ The API accepts the job and stores it as the durable work item — no broker, no
 | What the system may not do yet, and what unlocks it | [Architecture evolution gates](docs/architecture/system.md) |
 | How a change becomes acceptable here | [`.afds/constitution.md`](.afds/constitution.md), [`WORKFLOW.md`](WORKFLOW.md) |
 
-Loop 005 is the active plan in `docs/plans/active-loop.md`; the roadmap and its non-active candidates live in `docs/plans/candidates/README.md`.
+Loop 006 is the active plan in `docs/plans/active-loop.md`; the roadmap and its non-active candidates live in `docs/plans/candidates/README.md`.
 
 ## Repository shape
 
