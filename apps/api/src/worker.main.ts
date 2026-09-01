@@ -5,6 +5,7 @@ import {
 import { setTimeout as delay } from "node:timers/promises";
 import { DatabaseService } from "./database/database.service.js";
 import { PostgresGenerationJobQueue } from "./database/postgres-generation-job.queue.js";
+import { jobLogObserver, logEvent } from "./logging.js";
 import { createGenerationProvider } from "./providers/generation-provider.factory.js";
 
 const defaultIdleDelayMs = 200;
@@ -26,6 +27,8 @@ async function run(): Promise<void> {
   const worker = new GenerationJobWorker(
     new PostgresGenerationJobQueue(database),
     createGenerationProvider(process.env, defaultExecutionPolicy.leaseSeconds),
+    defaultExecutionPolicy,
+    jobLogObserver,
   );
 
   let running = true;
@@ -35,25 +38,25 @@ async function run(): Promise<void> {
   process.on("SIGTERM", stop);
   process.on("SIGINT", stop);
 
-  console.log("Generation job worker started.");
+  logEvent("info", "worker.started");
 
   try {
     while (running) {
-      const outcome = await worker.runOnce();
-
-      if (outcome === "idle") {
+      if ((await worker.runOnce()) === "idle") {
         await delay(idleDelayMs());
-        continue;
       }
-
-      console.log(`Generation job ${outcome}.`);
     }
+
+    logEvent("info", "worker.stopped");
   } finally {
     await database.close();
   }
 }
 
 run().catch((error: unknown) => {
-  console.error(error);
+  logEvent("error", "worker.failed", {
+    reason: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? (error.stack ?? "") : "",
+  });
   process.exitCode = 1;
 });

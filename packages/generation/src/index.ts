@@ -10,8 +10,10 @@ export {
 export type {
   ExecutionPolicy,
   GenerationJobLease,
+  GenerationJobObserver,
   GenerationJobOutcome,
   GenerationJobQueue,
+  SettledGenerationJob,
 } from "./generation-job-worker.js";
 export {
   defaultExecutionPolicy,

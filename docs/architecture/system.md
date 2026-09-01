@@ -51,10 +51,17 @@ Every claim issues one callback token and stores only its SHA-256 hash. The adap
 
 A wait whose deadline passes is recovered by the worker's recovery pass as a retryable failure: it returns to `queued` behind the Loop 003 backoff while attempts remain, and becomes `failed` on the last one. Loop 004's idempotency key keeps the resubmitted attempt from duplicating accepted work.
 
+## Runtime visibility
+
+`GET /health` runs the query startup uses, so `200 {"status":"ok"}` means this process can serve `GET /v1/jobs/:id`, not merely that it is running. An unusable database answers `503 {"status":"unavailable"}` with nothing else; the driver's message goes to the log. The route sits outside `/v1` because it reports on the runtime rather than on the product API, and it carries no authentication.
+
+The API logs one structured line per request through the Fastify runtime, recording the method and a path whose callback token is redacted — that token is the callback route's only authentication, so it never reaches a log. The worker owns what happened to a job and reports it through an observer port; the JSON adapter outside the generation package writes one `generation_job.settled` line per job with its identifier, attempt, and outcome. Only named fields are logged, so prompts, callback tokens, credentials, and provider payloads cannot reach a log line through it. `LOG_LEVEL` sets the level for both processes and silences them; an empty or unknown value falls back to `info` rather than failing startup. `GET /health` bounds its own check, so an exhausted pool answers `503` instead of hanging.
+
 ## Evolution gates
 
 - Persistent schema changes require a versioned forward migration and adapter evidence.
 - A second inbound route or another notice sender requires its own authentication decision.
+- Metrics, tracing, or log shipping requires a decision about what the platform exports and to whom.
 - A second provider adapter requires the contract suite to run against it unchanged.
 - External providers require mock-first contract tests and credential isolation.
 - Authentication requires a threat model and key-rotation decision.

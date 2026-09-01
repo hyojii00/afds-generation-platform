@@ -88,6 +88,17 @@ export interface GenerationJobQueue {
   }): Promise<{ requeued: number; failed: number }>;
 }
 
+export type SettledGenerationJob = Readonly<{
+  jobId: string;
+  attempt: number;
+  outcome: Exclude<GenerationJobOutcome, "idle">;
+}>;
+
+/** Receives what the worker settled. Formatting and transport live outside. */
+export interface GenerationJobObserver {
+  settled(job: SettledGenerationJob): void;
+}
+
 export type GenerationJobOutcome =
   | "idle"
   | "awaiting"
@@ -101,6 +112,7 @@ export class GenerationJobWorker {
     private readonly queue: GenerationJobQueue,
     private readonly provider: GenerationProviderPort,
     private readonly policy: ExecutionPolicy = defaultExecutionPolicy,
+    private readonly observer?: GenerationJobObserver,
   ) {}
 
   async runOnce(): Promise<GenerationJobOutcome> {
@@ -121,6 +133,16 @@ export class GenerationJobWorker {
       return "idle";
     }
 
+    const settle = (outcome: Exclude<GenerationJobOutcome, "idle">) => {
+      this.observer?.settled({
+        jobId: lease.jobId,
+        attempt: lease.attempt,
+        outcome,
+      });
+
+      return outcome;
+    };
+
     let outcome: ProviderOutcome;
 
     try {
@@ -131,7 +153,7 @@ export class GenerationJobWorker {
         callbackToken: lease.callbackToken,
       });
     } catch (error) {
-      return await this.applyFailure(lease, error);
+      return settle(await this.applyFailure(lease, error));
     }
 
     if (outcome.status === "accepted") {
@@ -141,17 +163,19 @@ export class GenerationJobWorker {
         deadlineSeconds: this.policy.awaitSeconds,
       });
 
-      return parked ? "awaiting" : "lost";
+      return settle(parked ? "awaiting" : "lost");
     }
 
     assertTransition(lease.status, "succeeded");
-    return (await this.queue.succeed(lease, outcome)) ? "succeeded" : "lost";
+    return settle(
+      (await this.queue.succeed(lease, outcome)) ? "succeeded" : "lost",
+    );
   }
 
   private async applyFailure(
     lease: GenerationJobLease,
     error: unknown,
-  ): Promise<GenerationJobOutcome> {
+  ): Promise<Exclude<GenerationJobOutcome, "idle">> {
     const reason = error instanceof Error ? error.message : String(error);
     const availableInSeconds =
       error instanceof RetryableGenerationError

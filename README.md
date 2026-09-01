@@ -48,7 +48,7 @@ The API accepts the job and stores it as the durable work item — no broker, no
 | What the system may not do yet, and what unlocks it | [Architecture evolution gates](docs/architecture/system.md) |
 | How a change becomes acceptable here | [`.afds/constitution.md`](.afds/constitution.md), [`WORKFLOW.md`](WORKFLOW.md) |
 
-Loop 005 is the active plan in `docs/plans/active-loop.md`; the roadmap and its non-active candidates live in `docs/plans/candidates/README.md`.
+Loop 006 is the active plan in `docs/plans/active-loop.md`; the roadmap and its non-active candidates live in `docs/plans/candidates/README.md`.
 
 ## Repository shape
 
@@ -74,7 +74,7 @@ pnpm verify
 pnpm dev:api
 ```
 
-The API listens on `http://localhost:3000` by default; set `PORT` to override it. Use `pnpm build && pnpm start:api` to run the SWC-compiled output, and `pnpm start:worker` to run the worker process beside it. The API requires `DATABASE_URL` and an applied migration and fails startup instead of falling back to memory. `pnpm verify` uses isolated PostgreSQL containers, so Docker must be available. See `docs/runbooks/local-development.md` for operations and cleanup.
+The API listens on `http://localhost:3000` by default; set `PORT` to override it, and `GET /health` reports whether it can serve requests. Use `pnpm build && pnpm start:api` to run the SWC-compiled output, and `pnpm start:worker` to run the worker process beside it. The API requires `DATABASE_URL` and an applied migration and fails startup instead of falling back to memory. `pnpm verify` uses isolated PostgreSQL containers, so Docker must be available. See `docs/runbooks/local-development.md` for operations and cleanup.
 
 ## Portfolio safety
 

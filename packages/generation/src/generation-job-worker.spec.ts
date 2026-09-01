@@ -9,6 +9,7 @@ import {
   type GenerationProviderPort,
   PermanentProviderError,
   retryDelaySeconds,
+  type SettledGenerationJob,
   TransientProviderError,
 } from "./index.js";
 
@@ -203,6 +204,49 @@ describe("GenerationJobWorker", () => {
       new GenerationJobWorker(queue, mockGenerationProvider).runOnce(),
     ).rejects.toBeInstanceOf(InvalidGenerationJobTransitionError);
     expect(queue.calls.some((call) => call.kind === "succeed")).toBe(false);
+  });
+
+  it("reports every settled job to its observer and stays quiet when idle", async () => {
+    const settled: SettledGenerationJob[] = [];
+    const observer = {
+      settled: (job: SettledGenerationJob) => {
+        settled.push(job);
+      },
+    };
+
+    await new GenerationJobWorker(
+      new RecordingQueue(undefined),
+      mockGenerationProvider,
+      defaultExecutionPolicy,
+      observer,
+    ).runOnce();
+    expect(settled).toEqual([]);
+
+    await new GenerationJobWorker(
+      new RecordingQueue(leaseFor(2)),
+      mockGenerationProvider,
+      defaultExecutionPolicy,
+      observer,
+    ).runOnce();
+    await new GenerationJobWorker(
+      new RecordingQueue(leaseFor(3)),
+      failingProvider(new PermanentProviderError("prompt is rejected")),
+      defaultExecutionPolicy,
+      observer,
+    ).runOnce();
+
+    expect(settled).toEqual([
+      {
+        jobId: "6430a8ca-6c92-4cc3-81f9-4f6ee93db23f",
+        attempt: 2,
+        outcome: "succeeded",
+      },
+      {
+        jobId: "6430a8ca-6c92-4cc3-81f9-4f6ee93db23f",
+        attempt: 3,
+        outcome: "failed",
+      },
+    ]);
   });
 
   it("parks work the provider accepted and releases the lease", async () => {

@@ -21,6 +21,7 @@ try {
   const api = startBuiltProcess("apps/api/dist/main.js", {
     DATABASE_URL: databaseUrl,
     PORT: String(port),
+    LOG_LEVEL: "silent",
   });
 
   try {
@@ -52,7 +53,12 @@ try {
 
     const worker = startBuiltProcess("apps/api/dist/worker.main.js", {
       DATABASE_URL: databaseUrl,
+      LOG_LEVEL: "info",
     });
+    const settled = () =>
+      worker.output
+        .split("\n")
+        .filter((line) => line.includes('"generation_job.settled"'));
 
     let workerExitCode;
 
@@ -83,6 +89,13 @@ try {
       ) {
         throw new Error(
           "Built worker changed a field other than the job status",
+        );
+      }
+      const [line] = settled();
+      const event = JSON.parse(line ?? "{}");
+      if (event.jobId !== created.id || event.outcome !== "succeeded") {
+        throw new Error(
+          `Built worker did not log the settled job:\n${worker.output}`,
         );
       }
     } finally {

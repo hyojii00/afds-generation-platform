@@ -3,6 +3,7 @@ import { Module } from "@nestjs/common";
 import { DatabaseModule } from "./database/database.module.js";
 import { DatabaseService } from "./database/database.service.js";
 import { PostgresGenerationJobRepository } from "./database/postgres-generation-job.repository.js";
+import { HealthController } from "./health.controller.js";
 import { JobsController } from "./jobs.controller.js";
 import {
   GENERATION_JOB_QUEUE,
@@ -12,7 +13,7 @@ import { PostgresGenerationJobQueue } from "./database/postgres-generation-job.q
 
 @Module({
   imports: [DatabaseModule],
-  controllers: [JobsController, ProviderCallbacksController],
+  controllers: [HealthController, JobsController, ProviderCallbacksController],
   providers: [
     {
       provide: GenerationJobs,
