@@ -6,13 +6,23 @@ A portfolio-safe reference implementation for building an asynchronous media-gen
 
 The repository demonstrates two things together:
 
-- A NestJS backend that evolves from job acceptance toward reliable asynchronous execution.
-- An Agent-First Development System (AFDS) where repository-owned plans, decision gates, tests, and evidence constrain AI-assisted work.
-- A Fastify runtime with SWC production compilation and a separate TypeScript type-safety gate.
+- **A backend** that evolves from job acceptance toward reliable asynchronous execution: NestJS on Fastify, PostgreSQL through Drizzle, SWC for production output, and TypeScript as a separate type-safety gate.
+- **An Agent-First Development System (AFDS)** where repository-owned plans, decision gates, tests, and evidence — not chat history — decide whether a change is acceptable.
 
-## Current capability
+Every capability below arrived through one bounded loop with its own plan, acceptance criteria, and evidence ledger in `docs/plans`.
 
-The implemented platform accepts a job for the local mock provider, persists it in PostgreSQL, executes it in an independent worker process through a provider-neutral port, settles it directly or through an authenticated provider completion notice, and reports the job's lifecycle status.
+## How a job runs
+
+```mermaid
+flowchart LR
+  Client -->|POST /v1/jobs| API[NestJS API]
+  Client -->|GET /v1/jobs/:id| API
+  API --> DB[(PostgreSQL)]
+  Worker[Worker process] -->|claim with lease + fencing token| DB
+  Worker --> Port[Provider port]
+  Port --> Provider[(Provider)]
+  Provider -.->|completion notice| API
+```
 
 ```http
 POST /v1/jobs
@@ -24,9 +34,21 @@ Content-Type: application/json
 }
 ```
 
-See `docs/plans/active-loop.md` for the exact scope, acceptance criteria, and verification evidence behind that capability.
+The API accepts the job and stores it as the durable work item — no broker, no outbox. A worker claims one row with `FOR UPDATE SKIP LOCKED`, holds it under a 30-second lease and a UUID fencing token, and calls the provider through a port that knows nothing about HTTP. A provider that answers immediately settles the job; one that answers `202` parks it, releases the lease, and reports the outcome later through a callback authenticated by a per-attempt token. Three attempts, 1-second and 2-second backoffs, and every deadline measured by PostgreSQL's own clock rather than a worker's.
 
-Loop 005 is active in `docs/plans/active-loop.md`; later possible outcomes remain non-active candidates in `docs/plans/candidates/README.md`.
+`GET /v1/jobs/:id` reports `queued`, `processing`, `succeeded`, or `failed` — the same four values and the same response fields since the first loop.
+
+## What is worth reading
+
+| Question | Where it is answered |
+| --- | --- |
+| Why PostgreSQL leasing instead of a broker or an outbox | [Loop 003 plan](docs/plans/completed/003-execute-jobs-reliably.md) |
+| How duplicate provider work is prevented | [Loop 004 plan](docs/plans/completed/004-isolate-provider-integrations.md) |
+| Why callbacks use a per-attempt token, not a shared secret | [ADR 0003](docs/architecture/decisions/0003-authenticate-provider-callbacks.md) |
+| What the system may not do yet, and what unlocks it | [Architecture evolution gates](docs/architecture/system.md) |
+| How a change becomes acceptable here | [`.afds/constitution.md`](.afds/constitution.md), [`WORKFLOW.md`](WORKFLOW.md) |
+
+Loop 005 is the active plan in `docs/plans/active-loop.md`; the roadmap and its non-active candidates live in `docs/plans/candidates/README.md`.
 
 ## Repository shape
 
