@@ -4,6 +4,10 @@ import { setTimeout as delay } from "node:timers/promises";
 
 export type LocalProvider = {
   url: string;
+  /** Notices the provider sent back, in order. */
+  notices(): ReadonlyArray<{ url: string; status: number }>;
+  /** The callback URL the most recent submission carried. */
+  receivedCallbackUrl(): string | undefined;
   /** The path of the most recent request, to prove base-URL handling. */
   receivedPath(): string | undefined;
   /** How many times the provider actually did the work for a key. */
@@ -22,6 +26,21 @@ export async function startLocalProvider(): Promise<LocalProvider> {
   const executions = new Map<string, number>();
   let authorization: string | undefined;
   let path: string | undefined;
+  let lastCallbackUrl: string | undefined;
+  const sent: { url: string; status: number }[] = [];
+
+  async function notify(url: string, body: unknown): Promise<void> {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      sent.push({ url, status: response.status });
+    } catch {
+      sent.push({ url, status: 0 });
+    }
+  }
 
   const server: Server = createServer((request, response) => {
     let body = "";
@@ -33,9 +52,16 @@ export async function startLocalProvider(): Promise<LocalProvider> {
       authorization = request.headers.authorization;
       path = request.url;
       const key = String(request.headers["idempotency-key"] ?? "");
-      const prompt = String(
-        (JSON.parse(body || "{}") as { prompt?: unknown }).prompt ?? "",
-      );
+      const submitted = JSON.parse(body || "{}") as {
+        prompt?: unknown;
+        callbackUrl?: unknown;
+      };
+      const prompt = String(submitted.prompt ?? "");
+      const callbackUrl =
+        typeof submitted.callbackUrl === "string"
+          ? submitted.callbackUrl
+          : undefined;
+      lastCallbackUrl = callbackUrl;
 
       const answer = (status: number, payload?: unknown) => {
         response.writeHead(status, { "content-type": "application/json" });
@@ -50,6 +76,37 @@ export async function startLocalProvider(): Promise<LocalProvider> {
       if (prompt.includes("stalled")) {
         response.writeHead(200, { "content-type": "application/json" });
         response.write('{"id": "par');
+        return;
+      }
+
+      if (prompt.includes("silent")) {
+        answer(202, {
+          id: createHash("sha256").update(key).digest("hex").slice(0, 16),
+        });
+        return;
+      }
+
+      if (prompt.includes("asynchronous")) {
+        const existing = references.get(key);
+        const reference =
+          existing ??
+          createHash("sha256").update(key).digest("hex").slice(0, 16);
+        if (!existing) {
+          references.set(key, reference);
+          executions.set(key, (executions.get(key) ?? 0) + 1);
+        }
+
+        answer(202, { id: reference });
+
+        if (callbackUrl) {
+          const notice = prompt.includes("rejects")
+            ? {
+                status: "failed",
+                reason: "provider could not render the prompt",
+              }
+            : { status: "succeeded", reference: `http:${reference}` };
+          setImmediate(() => void notify(callbackUrl, notice));
+        }
         return;
       }
 
@@ -114,6 +171,8 @@ export async function startLocalProvider(): Promise<LocalProvider> {
   return {
     url: `http://127.0.0.1:${address.port}`,
     receivedPath: () => path,
+    notices: () => sent,
+    receivedCallbackUrl: () => lastCallbackUrl,
     executions: (key) => executions.get(key) ?? 0,
     receivedAuthorization: () => authorization,
     close: () =>

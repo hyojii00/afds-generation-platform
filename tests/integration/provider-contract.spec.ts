@@ -17,7 +17,7 @@ import {
 const apiKey = "provider-secret-key";
 
 function requestFor(prompt: string, jobId = randomUUID()): ProviderRequest {
-  return { jobId, prompt, provider: "mock" };
+  return { jobId, prompt, provider: "mock", callbackToken: randomUUID() };
 }
 
 describe("generation provider contract", () => {
@@ -173,6 +173,34 @@ describe("generation provider contract", () => {
       expect(() =>
         createGenerationProvider({ PROVIDER_BASE_URL: "api.example.com" }, 30),
       ).toThrow("not a valid URL");
+    });
+
+    it("refuses a callback base URL that is not a URL", () => {
+      expect(() =>
+        createGenerationProvider(
+          {
+            PROVIDER_BASE_URL: local.url,
+            PUBLIC_CALLBACK_BASE_URL: "localhost:3000",
+          },
+          30,
+        ),
+      ).toThrow("PUBLIC_CALLBACK_BASE_URL is not a valid URL");
+    });
+
+    it("keeps the path of a callback base URL that has one", async () => {
+      const prefixed = new HttpGenerationProvider({
+        baseUrl: local.url,
+        timeoutMs: 500,
+        callbackBaseUrl: "https://api.example.com/afds",
+      });
+      const request = requestFor("An asynchronous cinematic sunrise");
+
+      await expect(prefixed.generate(request)).resolves.toMatchObject({
+        status: "accepted",
+      });
+      expect(local.receivedCallbackUrl()).toBe(
+        `https://api.example.com/afds/v1/provider-callbacks/${request.jobId}/${request.callbackToken}`,
+      );
     });
 
     it("refuses a timeout that outlives the lease", () => {

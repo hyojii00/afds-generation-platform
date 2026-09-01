@@ -22,6 +22,13 @@
       "when": 1788150474146,
       "tag": "0002_add_provider_reference",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788154672473,
+      "tag": "0003_add_provider_callbacks",
+      "breakpoints": true
     }
   ]
 }

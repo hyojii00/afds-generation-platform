@@ -2,9 +2,10 @@ import type {
   GenerationJobLease,
   GenerationJobQueue,
   GenerationJobStatus,
+  ProviderNotice,
   ProviderResult,
 } from "@afds-generation-platform/generation";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import type { DatabaseService } from "./database.service.js";
 
 type ClaimedRow = {
@@ -14,9 +15,38 @@ type ClaimedRow = {
   status: GenerationJobStatus;
   attempt_count: number;
   fencing_token: string;
+  callback_token: string;
 };
 
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 type RecoveredRow = { status: "queued" | "failed" };
+
+function countRecovered(rows: RecoveredRow[]): {
+  requeued: number;
+  failed: number;
+} {
+  return {
+    requeued: rows.filter((row) => row.status === "queued").length,
+    failed: rows.filter((row) => row.status === "failed").length,
+  };
+}
+
+/** The configured backoff for the attempt that just failed, in SQL. */
+function backoffCase(retryBackoffSeconds: readonly number[]): SQL {
+  const last = retryBackoffSeconds.at(-1);
+
+  if (last === undefined) {
+    return sql`0::double precision`;
+  }
+
+  const branches = retryBackoffSeconds.map(
+    (seconds, index) => sql`when ${index + 1} then ${seconds}`,
+  );
+
+  return sql`(case attempt_count ${sql.join(branches, sql` `)} else ${last} end)::double precision`;
+}
 
 /**
  * Row leasing over `generation_jobs`. Every ownership decision compares
@@ -40,16 +70,22 @@ export class PostgresGenerationJobQueue implements GenerationJobQueue {
          order by available_at, created_at
            for update skip locked
          limit 1
-      )
+      ),
+      issued as (select gen_random_uuid()::text as token)
       update generation_jobs as job
          set status = 'processing',
              attempt_count = job.attempt_count + 1,
              fencing_token = gen_random_uuid(),
              lease_expires_at = now() + make_interval(secs => ${input.leaseSeconds}),
+             callback_token_hash = encode(
+               sha256(convert_to(issued.token, 'UTF8')), 'hex'
+             ),
+             awaiting_deadline = null,
              failure_reason = null
-        from claimable
+        from claimable, issued
        where job.id = claimable.id
-      returning job.id, job.prompt, job.provider, job.status, job.attempt_count, job.fencing_token
+      returning job.id, job.prompt, job.provider, job.status, job.attempt_count,
+                job.fencing_token, issued.token as callback_token
     `);
 
     const row = claimed.rows[0];
@@ -65,6 +101,7 @@ export class PostgresGenerationJobQueue implements GenerationJobQueue {
       status: row.status,
       attempt: row.attempt_count,
       fencingToken: row.fencing_token,
+      callbackToken: row.callback_token,
     };
   }
 
@@ -102,6 +139,85 @@ export class PostgresGenerationJobQueue implements GenerationJobQueue {
     );
   }
 
+  async awaitProvider(
+    lease: GenerationJobLease,
+    input: { reference: string; deadlineSeconds: number },
+  ): Promise<boolean> {
+    return this.applyOwnedUpdate(
+      lease,
+      sql`status = 'awaiting_provider',
+          provider_reference = ${input.reference},
+          awaiting_deadline = now() + make_interval(secs => ${input.deadlineSeconds}),
+          failure_reason = null`,
+    );
+  }
+
+  /**
+   * Applies a completion notice. The attempt's token hash stands in for the
+   * lease: a notice for a previous attempt, a wrong token, or a second
+   * delivery matches nothing.
+   *
+   * A provider can answer before the worker finishes parking the job, so a
+   * notice also applies while the row is still `processing`. The parking
+   * update then finds no owned row and the worker reports a lost lease.
+   */
+  async applyProviderNotice(
+    jobId: string,
+    callbackTokenHash: string,
+    notice: ProviderNotice,
+  ): Promise<boolean> {
+    if (!uuidPattern.test(jobId)) {
+      return false;
+    }
+
+    const applied = await this.database.db.execute<{ id: string }>(sql`
+      update generation_jobs
+         set status = ${notice.status},
+             provider_reference = coalesce(
+               nullif(btrim(${
+                 notice.status === "succeeded"
+                   ? (notice.reference ?? null)
+                   : null
+}), ''),
+               provider_reference
+             ),
+             failure_reason = ${notice.status === "failed" ? notice.reason : null},
+             awaiting_deadline = null,
+             callback_token_hash = null
+       where id = ${jobId}
+         and status in ('processing', 'awaiting_provider')
+         and callback_token_hash = ${callbackTokenHash}
+         and (awaiting_deadline is null or awaiting_deadline > now())
+      returning id
+    `);
+
+    return applied.rows.length === 1;
+  }
+
+  async recoverExpiredWaits(input: {
+    maxAttempts: number;
+    retryBackoffSeconds: readonly number[];
+  }): Promise<{ requeued: number; failed: number }> {
+    const recovered = await this.database.db.execute<RecoveredRow>(sql`
+      update generation_jobs
+         set status = case
+               when attempt_count >= ${input.maxAttempts} then 'failed'
+               else 'queued'
+             end,
+             available_at = now() + make_interval(
+               secs => ${backoffCase(input.retryBackoffSeconds)}
+             ),
+             awaiting_deadline = null,
+             callback_token_hash = null,
+             failure_reason = 'provider did not report a result'
+       where status = 'awaiting_provider'
+         and awaiting_deadline <= now()
+      returning status
+    `);
+
+    return countRecovered(recovered.rows);
+  }
+
   async recoverExpiredLeases(input: {
     maxAttempts: number;
   }): Promise<{ requeued: number; failed: number }> {
@@ -124,10 +240,7 @@ export class PostgresGenerationJobQueue implements GenerationJobQueue {
       returning status
     `);
 
-    return {
-      requeued: recovered.rows.filter((row) => row.status === "queued").length,
-      failed: recovered.rows.filter((row) => row.status === "failed").length,
-    };
+    return countRecovered(recovered.rows);
   }
 
   /**

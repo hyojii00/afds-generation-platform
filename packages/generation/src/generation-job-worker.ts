@@ -1,6 +1,8 @@
 import type { GenerationProvider } from "./generation-jobs.js";
 import type {
   GenerationProviderPort,
+  ProviderNotice,
+  ProviderOutcome,
   ProviderResult,
 } from "./generation-provider.js";
 import { assertTransition, type GenerationJobStatus } from "./job-lifecycle.js";
@@ -13,18 +15,23 @@ export type GenerationJobLease = Readonly<{
   status: GenerationJobStatus;
   attempt: number;
   fencingToken: string;
+  /** Secret the provider must present to report this attempt's outcome. */
+  callbackToken: string;
 }>;
 
 export type ExecutionPolicy = Readonly<{
   maxAttempts: number;
   retryBackoffSeconds: readonly number[];
   leaseSeconds: number;
+  /** How long a provider may take to report work it accepted. */
+  awaitSeconds: number;
 }>;
 
 export const defaultExecutionPolicy: ExecutionPolicy = {
   maxAttempts: 3,
   retryBackoffSeconds: [1, 2],
   leaseSeconds: 30,
+  awaitSeconds: 60,
 };
 
 /**
@@ -60,13 +67,30 @@ export interface GenerationJobQueue {
     input: { availableInSeconds: number; reason: string },
   ): Promise<boolean>;
   fail(lease: GenerationJobLease, input: { reason: string }): Promise<boolean>;
+  /** Releases the lease and waits for the provider's completion notice. */
+  awaitProvider(
+    lease: GenerationJobLease,
+    input: { reference: string; deadlineSeconds: number },
+  ): Promise<boolean>;
+  /** Applies a notice to the job the token identifies, once. */
+  applyProviderNotice(
+    jobId: string,
+    callbackTokenHash: string,
+    notice: ProviderNotice,
+  ): Promise<boolean>;
   recoverExpiredLeases(input: {
     maxAttempts: number;
+  }): Promise<{ requeued: number; failed: number }>;
+  /** Recovers waits whose deadline passed, inside the attempt budget. */
+  recoverExpiredWaits(input: {
+    maxAttempts: number;
+    retryBackoffSeconds: readonly number[];
   }): Promise<{ requeued: number; failed: number }>;
 }
 
 export type GenerationJobOutcome =
   | "idle"
+  | "awaiting"
   | "succeeded"
   | "retrying"
   | "failed"
@@ -83,6 +107,10 @@ export class GenerationJobWorker {
     await this.queue.recoverExpiredLeases({
       maxAttempts: this.policy.maxAttempts,
     });
+    await this.queue.recoverExpiredWaits({
+      maxAttempts: this.policy.maxAttempts,
+      retryBackoffSeconds: this.policy.retryBackoffSeconds,
+    });
 
     const lease = await this.queue.claim({
       leaseSeconds: this.policy.leaseSeconds,
@@ -93,20 +121,31 @@ export class GenerationJobWorker {
       return "idle";
     }
 
-    let result: ProviderResult;
+    let outcome: ProviderOutcome;
 
     try {
-      result = await this.provider.generate({
+      outcome = await this.provider.generate({
         jobId: lease.jobId,
         prompt: lease.prompt,
         provider: lease.provider,
+        callbackToken: lease.callbackToken,
       });
     } catch (error) {
       return await this.applyFailure(lease, error);
     }
 
+    if (outcome.status === "accepted") {
+      assertTransition(lease.status, "awaiting_provider");
+      const parked = await this.queue.awaitProvider(lease, {
+        reference: outcome.reference,
+        deadlineSeconds: this.policy.awaitSeconds,
+      });
+
+      return parked ? "awaiting" : "lost";
+    }
+
     assertTransition(lease.status, "succeeded");
-    return (await this.queue.succeed(lease, result)) ? "succeeded" : "lost";
+    return (await this.queue.succeed(lease, outcome)) ? "succeeded" : "lost";
   }
 
   private async applyFailure(

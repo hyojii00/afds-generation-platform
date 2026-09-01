@@ -6,10 +6,10 @@ This roadmap shows the active loop and likely later outcomes in dependency order
 
 1. [Loop 002 — Persist Generation Jobs](../completed/002-persist-generation-jobs.md) — completed
 2. [Loop 003 — Execute Jobs Reliably](../completed/003-execute-jobs-reliably.md) — completed
-3. [Loop 004 — Isolate Provider Integrations](../active-loop.md) — active
-4. [Loop 005 — Deliver Provider Completion Events](005-deliver-provider-events.md) — candidate
+3. [Loop 004 — Isolate Provider Integrations](../completed/004-isolate-provider-integrations.md) — completed
+4. [Loop 005 — Deliver Provider Completion Events](../active-loop.md) — active
 
-Each later candidate depends on the previous loop being merged. Authentication, observability infrastructure, external messaging, billing, and real paid providers remain unscheduled.
+No candidate is scheduled after Loop 005; the next one is written when it is proposed. Each later candidate depends on the previous loop being merged. Authentication, observability infrastructure, external messaging, billing, and real paid providers remain unscheduled.
 
 ## Activation rule
 

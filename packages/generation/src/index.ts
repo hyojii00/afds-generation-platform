@@ -20,15 +20,21 @@ export {
   retryDelaySeconds,
 } from "./generation-job-worker.js";
 export { InMemoryGenerationJobRepository } from "./in-memory-generation-job.repository.js";
-export type { GenerationJobStatus } from "./job-lifecycle.js";
+export type {
+  GenerationJobStatus,
+  ReportedGenerationJobStatus,
+} from "./job-lifecycle.js";
 export {
   assertTransition,
   canTransition,
   generationJobStatuses,
   InvalidGenerationJobTransitionError,
+  reportedStatus,
 } from "./job-lifecycle.js";
 export type {
   GenerationProviderPort,
+  ProviderNotice,
+  ProviderOutcome,
   ProviderRequest,
   ProviderResult,
 } from "./generation-provider.js";

@@ -220,6 +220,7 @@ describe("generation job execution in PostgreSQL", () => {
       status: "processing",
       attempt: 1,
       fencingToken: crypto.randomUUID(),
+      callbackToken: crypto.randomUUID(),
     };
 
     const result = { reference: "provider:should-not-apply" };

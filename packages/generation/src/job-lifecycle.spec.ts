@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertTransition,
   canTransition,
+  reportedStatus,
   type GenerationJobStatus,
   generationJobStatuses,
   InvalidGenerationJobTransitionError,
@@ -11,19 +12,33 @@ const validTransitions: ReadonlyArray<
   [GenerationJobStatus, GenerationJobStatus]
 > = [
   ["queued", "processing"],
+  ["processing", "awaiting_provider"],
   ["processing", "succeeded"],
   ["processing", "failed"],
   ["processing", "queued"],
+  ["awaiting_provider", "succeeded"],
+  ["awaiting_provider", "failed"],
+  ["awaiting_provider", "queued"],
 ];
 
 describe("generation job lifecycle", () => {
-  it("exposes the four persisted statuses", () => {
+  it("exposes the five persisted statuses", () => {
     expect(generationJobStatuses).toEqual([
       "queued",
       "processing",
+      "awaiting_provider",
       "succeeded",
       "failed",
     ]);
+  });
+
+  it("reports waiting work as processing and every other status as itself", () => {
+    expect(reportedStatus("awaiting_provider")).toBe("processing");
+    for (const status of generationJobStatuses) {
+      if (status !== "awaiting_provider") {
+        expect(reportedStatus(status)).toBe(status);
+      }
+    }
   });
 
   it.each(validTransitions)("accepts %s to %s", (from, to) => {
@@ -43,7 +58,7 @@ describe("generation job lifecycle", () => {
         .map((to): [GenerationJobStatus, GenerationJobStatus] => [from, to]),
     );
 
-    expect(invalid).toHaveLength(12);
+    expect(invalid).toHaveLength(17);
     for (const [from, to] of invalid) {
       expect(canTransition(from, to)).toBe(false);
       expect(() => assertTransition(from, to)).toThrow(

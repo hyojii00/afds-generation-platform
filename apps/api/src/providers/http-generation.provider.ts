@@ -1,8 +1,8 @@
 import {
   type GenerationProviderPort,
   PermanentProviderError,
+  type ProviderOutcome,
   type ProviderRequest,
-  type ProviderResult,
   TransientProviderError,
 } from "@afds-generation-platform/generation";
 
@@ -10,7 +10,18 @@ export type HttpProviderConfig = Readonly<{
   baseUrl: string;
   apiKey?: string;
   timeoutMs: number;
+  /** Where the provider reports work it accepted; absent means none. */
+  callbackBaseUrl?: string;
 }>;
+
+export function callbackPath(jobId: string, token: string): string {
+  return `v1/provider-callbacks/${jobId}/${token}`;
+}
+
+/** Appends the trailing slash that keeps a base URL's own path in resolution. */
+function resolvable(url: string): string {
+  return url.endsWith("/") ? url : `${url}/`;
+}
 
 type ProviderBody = { id?: unknown };
 
@@ -28,22 +39,31 @@ async function discard(response: Response): Promise<void> {
  */
 export class HttpGenerationProvider implements GenerationProviderPort {
   private readonly endpoint: URL;
+  private readonly callbackBase: string | undefined;
 
   constructor(private readonly config: HttpProviderConfig) {
-    const base = config.baseUrl.endsWith("/")
-      ? config.baseUrl
-      : `${config.baseUrl}/`;
-
     try {
-      this.endpoint = new URL("generations", base);
+      this.endpoint = new URL("generations", resolvable(config.baseUrl));
     } catch {
       throw new Error(
         `PROVIDER_BASE_URL is not a valid URL: ${config.baseUrl}`,
       );
     }
+
+    if (config.callbackBaseUrl !== undefined) {
+      this.callbackBase = resolvable(config.callbackBaseUrl);
+
+      try {
+        new URL(callbackPath("id", "token"), this.callbackBase);
+      } catch {
+        throw new Error(
+          `PUBLIC_CALLBACK_BASE_URL is not a valid URL: ${config.callbackBaseUrl}`,
+        );
+      }
+    }
   }
 
-  async generate(request: ProviderRequest): Promise<ProviderResult> {
+  async generate(request: ProviderRequest): Promise<ProviderOutcome> {
     const response = await this.post(request);
 
     if (response.status === 429 || response.status >= 500) {
@@ -62,7 +82,20 @@ export class HttpGenerationProvider implements GenerationProviderPort {
       );
     }
 
-    return { reference: await this.reference(response) };
+    const reference = await this.reference(response);
+
+    if (response.status !== 202) {
+      return { status: "completed", reference };
+    }
+
+    if (!this.callbackBase) {
+      throw new PermanentProviderError(
+        "provider accepted the work but no callback URL is configured",
+        response.status,
+      );
+    }
+
+    return { status: "accepted", reference };
   }
 
   private async post(request: ProviderRequest): Promise<Response> {
@@ -82,12 +115,24 @@ export class HttpGenerationProvider implements GenerationProviderPort {
         body: JSON.stringify({
           prompt: request.prompt,
           provider: request.provider,
+          callbackUrl: this.callbackUrl(request),
         }),
         signal: AbortSignal.timeout(this.config.timeoutMs),
       });
     } catch (error) {
       throw this.transportFailure(error);
     }
+  }
+
+  private callbackUrl(request: ProviderRequest): string | undefined {
+    if (!this.callbackBase) {
+      return undefined;
+    }
+
+    return new URL(
+      callbackPath(request.jobId, request.callbackToken),
+      this.callbackBase,
+    ).toString();
   }
 
   /** A call that never completed is always worth another attempt. */

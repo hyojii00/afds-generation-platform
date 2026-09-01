@@ -12,7 +12,7 @@ The repository demonstrates two things together:
 
 ## Current capability
 
-The implemented platform accepts a job for the local mock provider, persists it in PostgreSQL, executes it in an independent worker process through a provider-neutral port, and reports the job's persisted lifecycle status.
+The implemented platform accepts a job for the local mock provider, persists it in PostgreSQL, executes it in an independent worker process through a provider-neutral port, settles it directly or through an authenticated provider completion notice, and reports the job's lifecycle status.
 
 ```http
 POST /v1/jobs
@@ -26,7 +26,7 @@ Content-Type: application/json
 
 See `docs/plans/active-loop.md` for the exact scope, acceptance criteria, and verification evidence behind that capability.
 
-Loop 004 is active in `docs/plans/active-loop.md`; later possible outcomes remain non-active candidates in `docs/plans/candidates/README.md`.
+Loop 005 is active in `docs/plans/active-loop.md`; later possible outcomes remain non-active candidates in `docs/plans/candidates/README.md`.
 
 ## Repository shape
 

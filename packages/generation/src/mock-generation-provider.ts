@@ -1,8 +1,8 @@
 import {
   type GenerationProviderPort,
   PermanentProviderError,
+  type ProviderOutcome,
   type ProviderRequest,
-  type ProviderResult,
 } from "./generation-provider.js";
 
 /**
@@ -10,7 +10,7 @@ import {
  * job identifier, so repeating a request yields the same reference.
  */
 export const mockGenerationProvider: GenerationProviderPort = {
-  async generate(request: ProviderRequest): Promise<ProviderResult> {
+  async generate(request: ProviderRequest): Promise<ProviderOutcome> {
     if (request.provider !== "mock") {
       throw new PermanentProviderError(
         `unsupported provider ${request.provider}`,
@@ -21,6 +21,6 @@ export const mockGenerationProvider: GenerationProviderPort = {
       throw new PermanentProviderError("prompt is empty");
     }
 
-    return { reference: `mock:${request.jobId}` };
+    return { status: "completed", reference: `mock:${request.jobId}` };
   },
 };
