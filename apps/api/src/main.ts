@@ -10,7 +10,7 @@ async function bootstrap() {
   const port = Number(process.env.PORT ?? 3000);
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter(),
+    new FastifyAdapter({ logger: { level: process.env.LOG_LEVEL ?? "info" } }),
   );
   await app.listen({ host: "0.0.0.0", port });
 }

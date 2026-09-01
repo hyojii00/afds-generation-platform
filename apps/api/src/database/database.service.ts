@@ -6,6 +6,7 @@ import { generationJobsTable } from "./generation-jobs.schema.js";
 export class DatabaseService {
   readonly pool: Pool;
   readonly db: NodePgDatabase<typeof schema>;
+  private closed = false;
 
   constructor(connectionString: string) {
     if (!connectionString) {
@@ -20,7 +21,13 @@ export class DatabaseService {
     await this.db.select().from(generationJobsTable).limit(0);
   }
 
+  /** Idempotent: shutdown may run after the pool has already been closed. */
   async close(): Promise<void> {
+    if (this.closed) {
+      return;
+    }
+
+    this.closed = true;
     await this.pool.end();
   }
 }

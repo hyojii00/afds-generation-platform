@@ -21,6 +21,7 @@ try {
   const api = startBuiltProcess("apps/api/dist/main.js", {
     DATABASE_URL: databaseUrl,
     PORT: String(port),
+    LOG_LEVEL: "silent",
   });
 
   try {
@@ -30,6 +31,19 @@ try {
       });
       return response.status === 404 ? true : undefined;
     });
+
+    const healthResponse = await fetch(`${apiUrl}/health`, {
+      signal: AbortSignal.timeout(1_000),
+    });
+    if (healthResponse.status !== 200) {
+      throw new Error(
+        `Expected health status 200, received ${healthResponse.status}`,
+      );
+    }
+    const health = await healthResponse.json();
+    if (health.status !== "ok") {
+      throw new Error(`Expected a healthy API, received ${health.status}`);
+    }
 
     const createdResponse = await fetch(`${apiUrl}/v1/jobs`, {
       method: "POST",
