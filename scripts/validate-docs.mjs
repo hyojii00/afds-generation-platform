@@ -1,7 +1,11 @@
 import { access, readFile } from "node:fs/promises";
 
-/** No later loop is scheduled; a candidate is added when one is proposed. */
-const candidateLoopFiles = [];
+/** Proposed but not activated; activation moves one into docs/plans/active-loop.md. */
+const candidateLoopFiles = [
+  "docs/plans/candidates/007-separate-methodology-from-instance.md",
+  "docs/plans/candidates/008-require-decision-records.md",
+  "docs/plans/candidates/009-adopt-a-dependency-graph.md",
+];
 
 const completedLoopFiles = [
   "docs/plans/completed/001-accept-and-retrieve-generation-jobs.md",
